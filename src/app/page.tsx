@@ -8,21 +8,10 @@ import { TrackTrendRadar } from "@/components/TrackTrendRadar";
 import { TrackDishToPost } from "@/components/TrackDishToPost";
 import { TrackCreatorScout } from "@/components/TrackCreatorScout";
 import { TrackIntelDesk } from "@/components/TrackIntelDesk";
-import { GraphExplorer } from "@/components/GraphExplorer";
-import { MaskoAvatarWidget } from "@/components/MaskoAvatarWidget";
 import { JudgeDemoModal } from "@/components/JudgeDemoModal";
 import { SettingsModal } from "@/components/SettingsModal";
 import { AboutModal, AboutSection } from "@/components/AboutModal";
 import { TrackType } from "@/types";
-
-// Which slice of the graph to show under each tab.
-const TAB_LENS: Partial<Record<TrackType, string>> = {
-  "chef-pepper": "all",
-  "trend-radar": "menu",
-  "dish-to-post": "menu",
-  "creator-scout": "creators",
-  "intel-desk": "rivals",
-};
 
 export default function Home() {
   const [activeTrack, setActiveTrack] = useState<TrackType>("chef-pepper");
@@ -44,8 +33,6 @@ export default function Home() {
     if (hashRead) window.history.replaceState(null, "", `#${activeTrack}`);
   }, [activeTrack, hashRead]);
 
-  const isChef = activeTrack === "chef-pepper";
-  const showBottom = activeTrack !== "knowledge-graph";
 
   return (
     <div className="min-h-screen bg-neutral-950 flex flex-col font-sans">
@@ -74,20 +61,6 @@ export default function Home() {
           {activeTrack === "creator-scout" && <TrackCreatorScout />}
           {activeTrack === "intel-desk" && <TrackIntelDesk />}
         </section>
-
-        {showBottom && (
-          <section className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* On the Chef Pepper tab the chat is the main panel, so the graph takes the full width. */}
-            <div className={isChef ? "lg:col-span-12" : "lg:col-span-7"}>
-              <GraphExplorer key={activeTrack} height={380} defaultLens={TAB_LENS[activeTrack] ?? "all"} />
-            </div>
-            {!isChef && (
-              <div className="lg:col-span-5 min-h-[460px]">
-                <MaskoAvatarWidget />
-              </div>
-            )}
-          </section>
-        )}
       </main>
 
       <footer className="border-t border-neutral-900 bg-neutral-950/80 py-4 text-xs text-neutral-500">
