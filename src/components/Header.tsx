@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { Play, Settings } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { Play, Settings, Search, X } from "lucide-react";
 import { TrackType } from "@/types";
 
 interface HeaderProps {
@@ -11,6 +11,8 @@ interface HeaderProps {
   onOpenSettings: () => void;
   onOpenAbout: (section: "about" | "pricing") => void;
   isJudgeDemoActive?: boolean;
+  query: string;
+  onQuery: (q: string) => void;
 }
 
 interface Status {
@@ -30,8 +32,26 @@ const TRACKS: { id: TrackType; label: string }[] = [
   { id: "knowledge-graph", label: "Knowledge Graph" },
 ];
 
-export const Header: React.FC<HeaderProps> = ({ activeTrack, setActiveTrack, onOpenJudgeDemo, onOpenSettings, onOpenAbout, isJudgeDemoActive }) => {
+export const Header: React.FC<HeaderProps> = ({
+  activeTrack, setActiveTrack, onOpenJudgeDemo, onOpenSettings, onOpenAbout, isJudgeDemoActive, query, onQuery,
+}) => {
   const [status, setStatus] = useState<Status | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // "/" opens search, like most streaming apps
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const typing = (e.target as HTMLElement)?.tagName === "INPUT" || (e.target as HTMLElement)?.tagName === "TEXTAREA";
+      if (e.key === "/" && !typing) {
+        e.preventDefault();
+        setSearchOpen(true);
+        setTimeout(() => searchRef.current?.focus(), 0);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -91,6 +111,47 @@ export const Header: React.FC<HeaderProps> = ({ activeTrack, setActiveTrack, onO
         </nav>
 
         <div className="shrink-0 flex items-center gap-3">
+          <div
+            className={`flex items-center gap-1.5 rounded-md transition-all duration-300 ${
+              searchOpen || query ? "w-44 sm:w-56 bg-neutral-950/80 border border-white/20 px-2 py-1" : "w-7"
+            }`}
+          >
+            <button
+              onClick={() => {
+                setSearchOpen(true);
+                setTimeout(() => searchRef.current?.focus(), 0);
+              }}
+              className="text-neutral-200 hover:text-white shrink-0"
+              aria-label="Search"
+              title="Search ( / )"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+            {(searchOpen || query) && (
+              <>
+                <input
+                  ref={searchRef}
+                  value={query}
+                  onChange={(e) => onQuery(e.target.value)}
+                  onBlur={() => !query && setSearchOpen(false)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      onQuery("");
+                      setSearchOpen(false);
+                    }
+                  }}
+                  placeholder="Dishes, trends, rivals, creators"
+                  className="min-w-0 flex-1 bg-transparent text-[12px] text-white placeholder-neutral-500 outline-none"
+                  aria-label="Search everything"
+                />
+                {query && (
+                  <button onClick={() => onQuery("")} className="text-neutral-400 hover:text-white" aria-label="Clear search">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </>
+            )}
+          </div>
           <button
             onClick={onOpenSettings}
             className="flex items-center gap-1.5 font-mono text-[11px] text-neutral-300 hover:text-white"

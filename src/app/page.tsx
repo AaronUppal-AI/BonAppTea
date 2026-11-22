@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Header } from "@/components/Header";
 import { BrowseHome } from "@/components/BrowseHome";
 import { MatrixRain } from "@/components/MatrixRain";
+import { IntroSplash } from "@/components/IntroSplash";
 import { TrackChefPepper } from "@/components/TrackChefPepper";
 import { TrackKnowledgeGraph } from "@/components/TrackKnowledgeGraph";
 import { TrackTrendRadar } from "@/components/TrackTrendRadar";
@@ -21,6 +22,7 @@ export default function Home() {
   const [isJudgeDemoOpen, setIsJudgeDemoOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [about, setAbout] = useState<AboutSection | null>(null);
+  const [query, setQuery] = useState("");
 
   // Tabs are linkable: bonapptea.vercel.app/#knowledge-graph
   const [hashRead, setHashRead] = useState(false);
@@ -29,6 +31,11 @@ export default function Home() {
     const valid: TrackType[] = ["home", "chef-pepper", "knowledge-graph", "trend-radar", "dish-to-post", "creator-scout", "intel-desk"];
     if (valid.includes(fromHash)) setActiveTrack(fromHash);
     if ((fromHash as string) === "about" || (fromHash as string) === "pricing") setAbout(fromHash as unknown as AboutSection);
+    const q = new URLSearchParams(window.location.search).get("q");
+    if (q) {
+      setQuery(q.slice(0, 80));
+      setActiveTrack("home");
+    }
     setHashRead(true);
   }, []);
   useEffect(() => {
@@ -41,17 +48,34 @@ export default function Home() {
     <div className="relative min-h-screen flex flex-col font-sans">
       <MatrixRain opacity={activeTrack === "home" ? 0.9 : 0.6} />
       <div className="scanlines" aria-hidden="true" />
+      <IntroSplash />
       <Header
         activeTrack={activeTrack}
-        setActiveTrack={setActiveTrack}
+        setActiveTrack={(t) => {
+          setQuery("");
+          setActiveTrack(t);
+        }}
         onOpenJudgeDemo={() => setIsJudgeDemoOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenAbout={setAbout}
         isJudgeDemoActive={isJudgeDemoOpen}
+        query={query}
+        onQuery={(q) => {
+          setQuery(q);
+          if (q) setActiveTrack("home");
+        }}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {activeTrack === "home" && <BrowseHome onNavigate={setActiveTrack} />}
+        {activeTrack === "home" && (
+          <BrowseHome
+            query={query}
+            onNavigate={(t) => {
+              setQuery("");
+              setActiveTrack(t);
+            }}
+          />
+        )}
         <section className={activeTrack === "home" ? "hidden" : "glass rounded-3xl p-5 sm:p-6 animate-fade-up"}>
           {activeTrack === "chef-pepper" && <TrackChefPepper />}
           {activeTrack === "knowledge-graph" && <TrackKnowledgeGraph />}

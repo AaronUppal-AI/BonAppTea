@@ -68,23 +68,44 @@ export const CypherTrace: React.FC<{ cypher?: string; rows?: number }> = ({ cyph
   );
 };
 
+/** Cinematic section header: "Trend Radar: Menu Hacking…" becomes a mono kicker over a chrome headline. */
 export const TrackHeader: React.FC<{ icon: React.ReactNode; title: string; subtitle: string; right?: React.ReactNode }> = ({
   icon,
   title,
   subtitle,
   right,
-}) => (
-  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-4 border-b border-neutral-800">
-    <div>
-      <h2 className="text-lg sm:text-xl text-white flex items-center gap-2">
-        {icon}
-        <span className="font-display chrome-text tracking-wide">{title}</span>
-      </h2>
-      <p className="text-xs text-neutral-300 mt-1">{subtitle}</p>
+}) => {
+  const [kicker, ...rest] = title.split(":");
+  const headline = rest.length ? rest.join(":").trim() : kicker;
+  return (
+    <div className="relative -mx-5 sm:-mx-6 -mt-5 sm:-mt-6 mb-2 px-5 sm:px-6 pt-8 pb-6 rounded-t-3xl overflow-hidden border-b border-white/5">
+      <div
+        className="absolute inset-0 pointer-events-none"
+        aria-hidden="true"
+        style={{
+          background:
+            "radial-gradient(70% 120% at 0% 0%, rgba(124,255,196,0.14), transparent 60%), radial-gradient(60% 120% at 100% 0%, rgba(201,184,255,0.14), transparent 60%)",
+        }}
+      />
+      <div className="relative flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          {rest.length > 0 && (
+            <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] phosphor">
+              {icon}
+              {kicker}
+            </div>
+          )}
+          <h2 className="font-display chrome-text text-2xl sm:text-4xl leading-tight mt-1 flex items-center gap-2">
+            {rest.length === 0 && icon}
+            {headline}
+          </h2>
+          <p className="text-sm text-neutral-300 mt-2 max-w-3xl">{subtitle}</p>
+        </div>
+        {right}
+      </div>
     </div>
-    {right}
-  </div>
-);
+  );
+};
 
 /** Placeholder blocks shown while a panel's data loads, so the layout appears at once. */
 export const Skeleton: React.FC<{ label: string; cards?: number; side?: boolean }> = ({ label, cards = 3, side = true }) => (
