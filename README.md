@@ -73,14 +73,25 @@ src/
 | :--- | :--- | :--- |
 | **Trend Radar** | Trend lifecycle board (Emerging → Saturated) matched against the pantry | Web proof per trend (last month) and the city's food buzz (last week) |
 | **Dish-to-Post** | Best trend match per dish (≥ 2 shared ingredients), hook, audio, 3-clip shot list, caption, hashtags | How others are filming that trend |
-| **Creator Scout** | Every creator vetted, with pass/fail reasons, plus a copyable VIP invite for a slow shift | — |
+| **Creator Scout** | Every creator vetted, with pass/fail reasons, plus a copyable VIP invite for a slow shift | **Treg:** live Instagram scan of the neighborhood's food hashtags; restaurants are filtered out and real creators are written into Neo4j |
 | **Intel Desk** | Rival complaints this week paired with the restaurant's strengths | Neighborhood restaurant news (last month) and sources for fact-checking a menu claim |
 
 You.com results are never faked: if `YOU_API_KEY` is missing or a search fails, the panel says so. Each graph panel can show the Cypher query behind it.
 
 ## Status
 
-Restaurant, creator, trend and competitor data in the graph is demo seed data for one East Village restaurant. Live creator discovery from geo-tagged posts (Treg) is next.
+Restaurant, menu, trend and competitor data in the graph is demo seed data for one East Village restaurant. Creators are a mix of demo data and **live creators discovered through Treg** (marked "Live · Treg").
+
+### Live creator discovery (Treg → Neo4j)
+
+`POST /api/creators/discover` runs, in about 30 seconds and about 2¢:
+
+1. Instagram hashtag search for `#<neighborhood>food`, `#<neighborhood>eats` and `#<city>foodie`.
+2. A profile lookup for each new poster. Restaurants and businesses (by category or bio: address, hours, "order", "reservations") are skipped and remembered.
+3. Each creator's recent posts: followers, median engagement, and the share of geo-tagged posts in the city. Instagram doesn't publish audience location, so this "local posting %" stands in for local audience.
+4. `MERGE` into Neo4j as `LocalCreator {source: 'treg'}`, linked to the neighborhood they post from most.
+
+Creator Scout, the graph view and Chef Pepper then vet them with the same rules as every creator. Scans are limited to one per 6 hours (stored in the graph) so public traffic can't drain the Treg balance.
 
 ## License
 

@@ -35,7 +35,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         { name: "You.com Search", ok: status.youCom.configured, env: "YOU_API_KEY", use: "Trend proof, city buzz, filming references, fact checks" },
         { name: "Neo4j AuraDB", ok: status.neo4j.connected, env: "NEO4J_URI / NEO4J_PASSWORD", use: "The restaurant graph behind every tab and Chef Pepper" },
         { name: "Masko", ok: status.masko.configured, env: "MASKO_API_KEY", use: "Chef Pepper's character and animations" },
-        { name: "Treg", ok: status.treg.configured, env: "TREG_API_KEY", use: "Live creator discovery from geo-tagged posts (coming next)" },
+        { name: "Treg", ok: status.treg.configured, env: "TREG_API_KEY", use: "Live creator discovery from Instagram (Creator Scout)" },
       ]
     : [];
 

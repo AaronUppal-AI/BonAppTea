@@ -16,6 +16,7 @@ interface Status {
   neo4j: { connected: boolean };
   youCom: { configured: boolean };
   masko: { configured: boolean };
+  treg: { configured: boolean };
 }
 
 const TRACKS: { id: TrackType; label: string; icon: React.ReactNode; active: string }[] = [
@@ -75,6 +76,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTrack, setActiveTrack, onO
             <Badge ok={status?.youCom.configured} label="You.com" />
             <Badge ok={status?.neo4j.connected} label="Neo4j" />
             <Badge ok={status?.masko.configured} label="Masko" />
+            <Badge ok={status?.treg.configured} label="Treg" />
           </div>
 
           <div className="flex items-center gap-2.5">

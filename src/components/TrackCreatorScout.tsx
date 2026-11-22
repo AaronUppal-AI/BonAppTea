@@ -1,16 +1,53 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Users, CheckCircle2, XCircle, Copy, Check, MapPin } from "lucide-react";
+import { Users, CheckCircle2, XCircle, Copy, Check, MapPin, Radar, ExternalLink } from "lucide-react";
 import type { RestaurantProfile, VettedCreator } from "@/types";
 import { CypherTrace, TrackHeader, ErrorNote, getJson } from "./ui";
+
+interface ScanStatus {
+  tregConfigured: boolean;
+  lastScanAt: string | null;
+  lastScanCostUsd: number | null;
+  nextScanAt: string | null;
+}
 
 interface CreatorsData {
   restaurant: RestaurantProfile;
   creators: VettedCreator[];
   featuredDish: string | null;
   cypher: string;
+  scan: ScanStatus;
 }
+
+interface ScanResult {
+  skipped: boolean;
+  nextScanAt: string | null;
+  hashtags: string[];
+  postsScanned: number;
+  added: { handle: string }[];
+  businessesSkipped: { handle: string; category: string }[];
+  failures: string[];
+  costUsd: number;
+}
+
+const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+
+const LiveBadge: React.FC = () => (
+  <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-500/30">
+    Live · Treg
+  </span>
+);
+
+const localText = (c: VettedCreator) =>
+  c.localPct === null ? "local reach unknown" : c.localMetric === "posting" ? `${c.localPct}% of tagged posts in NYC` : `${c.localPct}% local`;
+
+const proximityText: Record<VettedCreator["proximity"], string> = {
+  home: "your neighborhood",
+  adjacent: "next door",
+  city: "city-wide",
+  outside: "outside your area",
+};
 
 const k = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
 
@@ -25,16 +62,38 @@ export const TrackCreatorScout: React.FC = () => {
   const [selected, setSelected] = useState<VettedCreator | null>(null);
   const [shift, setShift] = useState<string>("");
   const [copied, setCopied] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = (keepSelection = false) =>
     getJson<CreatorsData>("/api/creators")
       .then((d) => {
         setData(d);
-        setSelected(d.creators.find((c) => c.passed) ?? null);
-        setShift(d.restaurant.slowShifts[0] ?? "a weeknight");
+        if (!keepSelection) setSelected(d.creators.find((c) => c.passed) ?? null);
+        setShift((s) => s || d.restaurant.slowShifts[0] || "a weeknight");
       })
       .catch((e) => setError(e.message));
+
+  useEffect(() => {
+    load();
   }, []);
+
+  const runScan = async () => {
+    setScanning(true);
+    setScanError(null);
+    try {
+      const result = await getJson<ScanResult>("/api/creators/discover", { method: "POST" });
+      setScanResult(result);
+      await load(true);
+    } catch (e: any) {
+      setScanError(e.message);
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const coolingDown = Boolean(data?.scan.nextScanAt && new Date(data.scan.nextScanAt).getTime() > Date.now());
 
   const passed = data?.creators.filter((c) => c.passed) ?? [];
   const rejected = data?.creators.filter((c) => !c.passed) ?? [];
@@ -59,6 +118,49 @@ export const TrackCreatorScout: React.FC = () => {
       {!data && !error && <div className="text-xs text-neutral-500 animate-pulse">Vetting local creators…</div>}
 
       {data && (
+        <div className="p-3.5 rounded-xl border border-fuchsia-500/30 bg-fuchsia-950/10 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex-1 text-xs">
+            <div className="font-semibold text-white flex items-center gap-1.5">
+              <Radar className="w-4 h-4 text-fuchsia-400" /> Live discovery from Instagram, via Treg
+            </div>
+            <p className="text-neutral-400 mt-0.5">
+              Scans {data.restaurant.neighborhood} food hashtags, drops restaurant accounts, measures each creator&apos;s followers,
+              engagement and where they post, then writes them into the Neo4j graph for vetting. About 2¢ per scan.
+            </p>
+            {data.scan.lastScanAt && (
+              <p className="text-[11px] text-neutral-500 mt-1">
+                Last scan {new Date(data.scan.lastScanAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                {data.scan.lastScanCostUsd !== null && ` · $${data.scan.lastScanCostUsd.toFixed(4)}`}
+              </p>
+            )}
+          </div>
+          <button
+            onClick={runScan}
+            disabled={scanning || coolingDown || !data.scan.tregConfigured}
+            className="shrink-0 text-xs px-3 py-2 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-semibold disabled:opacity-50"
+          >
+            {!data.scan.tregConfigured
+              ? "Treg not configured"
+              : scanning
+              ? "Scanning Instagram… (~30s)"
+              : coolingDown
+              ? `Next scan after ${timeOf(data.scan.nextScanAt!)}`
+              : "Scan for new creators"}
+          </button>
+        </div>
+      )}
+      {scanError && <ErrorNote message={scanError} />}
+      {scanResult && !scanResult.skipped && (
+        <div className="text-[11px] text-neutral-300 -mt-3 px-1">
+          Scanned {scanResult.postsScanned} posts from {scanResult.hashtags.map((h) => `#${h}`).join(", ")} · added{" "}
+          {scanResult.added.length} creator{scanResult.added.length === 1 ? "" : "s"} to the graph · skipped{" "}
+          {scanResult.businessesSkipped.length} restaurant/business account{scanResult.businessesSkipped.length === 1 ? "" : "s"} · cost $
+          {scanResult.costUsd.toFixed(4)}
+          {scanResult.failures.length > 0 && <span className="text-amber-400"> · {scanResult.failures.length} lookups failed</span>}
+        </div>
+      )}
+
+      {data && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-7 space-y-4">
             <div className="flex items-center justify-between">
@@ -77,16 +179,28 @@ export const TrackCreatorScout: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-white flex items-center gap-1.5">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400" /> {c.handle}
+                    {c.source === "treg" && <LiveBadge />}
                   </span>
                   <span className="text-[11px] font-mono text-emerald-300">score {c.score}</span>
                 </div>
                 <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-neutral-400">
                   <span>{k(c.followers)} followers</span>
-                  <span className="text-emerald-300">{c.localPct}% local</span>
+                  <span className="text-emerald-300">{localText(c)}</span>
                   <span>{c.engagement}% engagement</span>
                   <span className="flex items-center gap-0.5">
-                    <MapPin className="w-3 h-3" /> {c.audienceHood} ({c.proximity === "home" ? "your neighborhood" : "next door"})
+                    <MapPin className="w-3 h-3" /> {c.audienceHood} ({proximityText[c.proximity]})
                   </span>
+                  {c.samplePostUrl && (
+                    <a
+                      href={c.samplePostUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-fuchsia-300 hover:text-fuchsia-200 flex items-center gap-0.5"
+                    >
+                      post <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
                 </div>
               </button>
             ))}
@@ -97,9 +211,10 @@ export const TrackCreatorScout: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-neutral-400 flex items-center gap-1.5">
                     <XCircle className="w-4 h-4 text-rose-400/80" /> {c.handle}
+                    {c.source === "treg" && <LiveBadge />}
                   </span>
                   <span className="text-[11px] text-neutral-500">
-                    {k(c.followers)} · {c.localPct}% local
+                    {k(c.followers)} · {localText(c)}
                   </span>
                 </div>
                 <ul className="mt-1 text-[11px] text-rose-300/80 list-disc list-inside">
@@ -141,7 +256,9 @@ export const TrackCreatorScout: React.FC = () => {
                   {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />} {copied ? "Copied" : "Copy invite"}
                 </button>
                 <p className="text-[10px] text-neutral-500">
-                  Creator stats are demo data in the graph. Live discovery from geo-tagged posts goes through Treg.
+                  {selected.source === "treg"
+                    ? "Found live on Instagram through Treg. Instagram doesn't publish audience location, so local reach is measured by where they post."
+                    : "Demo creator from the seed graph. Run a live scan to add real creators."}
                 </p>
               </div>
             ) : (

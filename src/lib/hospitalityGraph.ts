@@ -189,17 +189,21 @@ LIMIT 3`,
   creators: `
 MATCH (r:Restaurant {id: $rid})-[:LOCATED_IN]->(home:Neighborhood)
 MATCH (c:LocalCreator)-[:AUDIENCE_LOCATED_IN]->(n:Neighborhood)
-WHERE (n = home OR (home)-[:ADJACENT_TO]-(n))
+WHERE (n = home OR (home)-[:ADJACENT_TO]-(n) OR n.name STARTS WITH 'Elsewhere in')
   AND 5000 <= c.followers <= 30000
   AND c.local_audience_pct >= 70
+  AND c.engagement_rate IS NOT NULL
   AND NOT EXISTS {
     MATCH (c)-[p:PROMOTED]->(:Competitor)-[:COMPETES_IN]->(home) WHERE p.days_ago <= 60
   }
-RETURN c.handle AS handle, c.followers AS followers, c.local_audience_pct AS localPct,
-       c.engagement_rate AS engagement, n.name AS audienceHood,
-       COUNT { MATCH (:LocalCreator) } AS scanned
-ORDER BY c.local_audience_pct * c.engagement_rate DESC
-LIMIT 3`,
+WITH c, n, CASE WHEN n.name STARTS WITH 'Elsewhere in' THEN 0.6 ELSE 1.0 END AS reach
+ORDER BY c.local_audience_pct * c.engagement_rate * reach DESC
+WITH collect({handle: c.handle, followers: c.followers, localPct: c.local_audience_pct,
+              engagement: c.engagement_rate, audienceHood: n.name,
+              live: coalesce(c.source, 'seed') = 'treg'}) AS passing
+RETURN size(passing) AS passed, passing[0..3] AS top,
+       [p IN passing WHERE p.live | p.handle] AS liveHandles,
+       COUNT { MATCH (:LocalCreator) } AS scanned`,
   competitors: `
 MATCH (r:Restaurant {id: $rid})-[:LOCATED_IN]->(home:Neighborhood)
 MATCH (comp:Competitor)-[:COMPETES_IN]->(home)
@@ -274,11 +278,14 @@ function speakTrends(rows: any[]): { speech: string; mood: Mood } {
 }
 
 function speakCreators(rows: any[]): { speech: string; mood: Mood } {
-  if (!rows.length) return { speech: "No creator in your area passes the local-audience check yet. Better zero than feeding freeloaders!", mood: "alert" };
-  const scanned = rows[0].scanned;
-  const list = rows.map((c) => `${c.handle} (${k(c.followers)}, ${c.localPct}% local, ${c.engagement}% engagement)`).join("; ");
+  const r = rows[0];
+  if (!r || r.passed === 0) return { speech: "No creator in your area passes the local-audience check yet. Better zero than feeding freeloaders!", mood: "alert" };
+  const list = r.top.map((c: any) => `${c.handle} (${k(c.followers)}, ${c.localPct}% local, ${c.engagement}% engagement)`).join("; ");
+  const live = r.liveHandles.length
+    ? ` ${r.liveHandles.join(", ")} ${r.liveHandles.length === 1 ? "was" : "were"} found live on Instagram through Treg.`
+    : "";
   return {
-    speech: `I checked ${scanned} creators and only ${rows.length} are worth a comped table: ${list}. The rest are vanity accounts, outside your area, or recently promoted a rival. Want me to draft ${rows[0].handle}'s invite?`,
+    speech: `I checked ${r.scanned} creators and only ${r.passed} are worth a comped table. Top picks: ${list}.${live} The rest are vanity accounts, outside your area, or recently promoted a rival. Want me to draft ${r.top[0].handle}'s invite?`,
     mood: "excited",
   };
 }
@@ -323,7 +330,7 @@ export async function answerWithGraph(driver: Driver, message: string, rid = DEF
     ]);
     const shift = (overview.rows[0]?.slowShifts as string[] | undefined)?.[0] ?? "your slow shift";
     const p = speakPost(post.rows).speech;
-    const top = creators.rows[0] as any;
+    const top = (creators.rows[0] as any)?.top?.[0];
     const creatorLine = top ? ` Then invite ${top.handle} (${top.localPct}% local) for a comped ${shift} tasting so their post lands the same week.` : "";
     return {
       speech: `Let's fill ${shift}. ${p}${creatorLine}`,
@@ -439,8 +446,11 @@ RETURN c.handle AS handle, c.followers AS followers, c.local_audience_pct AS loc
        c.engagement_rate AS engagement, n.name AS audienceHood,
        CASE WHEN n = home THEN 'home'
             WHEN EXISTS { (home)-[:ADJACENT_TO]-(n) } THEN 'adjacent'
+            WHEN n.name STARTS WITH 'Elsewhere in' THEN 'city'
             ELSE 'outside' END AS proximity,
-       comp.name AS rival, p.days_ago AS rivalDaysAgo`;
+       comp.name AS rival, p.days_ago AS rivalDaysAgo,
+       coalesce(c.source, 'seed') AS source, coalesce(c.local_metric, 'audience') AS localMetric,
+       c.sample_post_url AS samplePostUrl, toString(c.discovered_at) AS discoveredAt`;
 
 export interface VettedCreator {
   handle: string;
@@ -448,9 +458,16 @@ export interface VettedCreator {
   localPct: number;
   engagement: number;
   audienceHood: string;
-  proximity: "home" | "adjacent" | "outside";
+  /** home/adjacent neighborhood, 'city' = posts across the same city (subway-close), 'outside' = elsewhere */
+  proximity: "home" | "adjacent" | "city" | "outside";
   rival: string | null;
   rivalDaysAgo: number | null;
+  /** 'seed' = demo data; 'treg' = discovered live from Instagram through Treg */
+  source: "seed" | "treg";
+  /** 'audience' = % of followers who are local; 'posting' = % of geo-tagged posts in the city */
+  localMetric: "audience" | "posting";
+  samplePostUrl: string | null;
+  discoveredAt: string | null;
   passed: boolean;
   reasons: string[];
   score: number;
@@ -465,11 +482,18 @@ export async function getCreatorVetting(driver: Driver, rid = DEFAULT_RESTAURANT
       const reasons: string[] = [];
       if (c.followers < 5000) reasons.push("Under 5k followers");
       if (c.followers > 30000) reasons.push(`${Math.round(c.followers / 1000)}k followers: not a micro-creator`);
-      if (c.localPct < 70) reasons.push(`Only ${c.localPct}% local audience`);
-      if (c.proximity === "outside") reasons.push(`Audience is in ${c.audienceHood}, outside your area`);
+      const localLabel = c.localMetric === "posting" ? "of geo-tagged posts are local" : "local audience";
+      if (c.localPct === null || c.localPct === undefined) reasons.push("Too few geo-tagged posts to judge local reach");
+      else if (c.localPct < 70) reasons.push(`Only ${c.localPct}% ${localLabel}`);
+      if (c.engagement === null || c.engagement === undefined) reasons.push("Engagement unknown");
+      if (c.proximity === "outside")
+        reasons.push(c.audienceHood === "Outside the city" ? "Posts mostly outside the city" : `Audience is in ${c.audienceHood}, outside your area`);
       if (c.rival && c.rivalDaysAgo !== null && c.rivalDaysAgo <= 60)
         reasons.push(`Promoted ${c.rival} ${c.rivalDaysAgo} days ago`);
-      return { ...c, passed: reasons.length === 0, reasons, score: Math.round(c.localPct * c.engagement) / 10 };
+      // City-wide creators still reach diners a subway ride away, but rank below true locals.
+      const reach = c.proximity === "city" ? 0.6 : 1;
+      const score = reasons.length === 0 ? Math.round(c.localPct * c.engagement * reach) / 10 : 0;
+      return { ...c, passed: reasons.length === 0, reasons, score };
     })
     .sort((a: VettedCreator, b: VettedCreator) => Number(b.passed) - Number(a.passed) || b.score - a.score);
 }
