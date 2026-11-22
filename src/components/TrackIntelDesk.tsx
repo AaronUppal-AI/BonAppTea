@@ -3,9 +3,11 @@
 import React, { useEffect, useState } from "react";
 import { Binoculars, Target, ShieldQuestion, Search } from "lucide-react";
 import type { RestaurantProfile, RivalComplaint, YouSearchResponse } from "@/types";
-import { YouSources, CypherTrace, TrackHeader, ErrorNote, getJson } from "./ui";
+import { YouSources, CypherTrace, TrackHeader, ErrorNote, getJson, Skeleton, FreshnessLine } from "./ui";
+import type { Freshness } from "./ui";
 
 interface IntelData {
+  freshness?: Freshness[];
   restaurant: RestaurantProfile;
   rivals: RivalComplaint[];
   buzz: YouSearchResponse;
@@ -63,7 +65,8 @@ export const TrackIntelDesk: React.FC = () => {
       />
 
       {error && <ErrorNote message={error} />}
-      {!data && !error && <div className="text-xs text-neutral-500 animate-pulse">Scanning the block…</div>}
+      {!data && !error && <Skeleton label="Reading rival reviews and neighborhood news…" />}
+      {data && <FreshnessLine items={data.freshness} />}
 
       {data && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

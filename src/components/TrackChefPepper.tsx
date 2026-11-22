@@ -3,7 +3,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ChefHat, Send, Volume2, VolumeX } from "lucide-react";
 import type { GraphQueryTrace } from "@/types";
-import { TrackHeader } from "./ui";
+import { TrackHeader, FreshnessLine } from "./ui";
+import type { Freshness } from "./ui";
 
 type Mood = "idle" | "speaking" | "thinking" | "alert" | "excited";
 
@@ -12,6 +13,7 @@ interface Message {
   text: string;
   mood?: Mood;
   queries?: GraphQueryTrace[] | null;
+  sources?: Freshness[] | null;
 }
 
 const SUGGESTIONS = [
@@ -57,7 +59,7 @@ export const TrackChefPepper: React.FC = () => {
     {
       role: "chef",
       mood: "speaking",
-      text: "Ciao! I'm Chef Pepper, your co-host. Everything I tell you comes straight from your restaurant's knowledge graph: trends, your menu, local creators and what the rivals are up to. What are we cooking up?",
+      text: "Hi chef! I'm Chef Pepper, your co-host. Everything I tell you comes straight from your restaurant's knowledge graph: your menu, rising trends, creators who post near you and what your rivals' diners complain about. Pick a question below or ask me anything.",
     },
   ]);
   const [input, setInput] = useState("");
@@ -93,7 +95,10 @@ export const TrackChefPepper: React.FC = () => {
         body: JSON.stringify({ message }),
       });
       const data = await res.json();
-      setMessages((m) => [...m, { role: "chef", text: data.speech, mood: data.mood, queries: data.graph?.queries ?? null }]);
+      setMessages((m) => [
+        ...m,
+        { role: "chef", text: data.speech, mood: data.mood, queries: data.graph?.queries ?? null, sources: data.sources ?? null },
+      ]);
       speak(data.speech);
     } catch {
       setMessages((m) => [...m, { role: "chef", text: "I couldn't reach the kitchen. Try me again in a second.", mood: "alert" }]);
@@ -135,8 +140,8 @@ export const TrackChefPepper: React.FC = () => {
             <div className="text-[11px] font-mono uppercase tracking-widest text-neutral-400">{mood}</div>
           </div>
           <p className="text-[11px] text-neutral-500 max-w-xs">
-            A Masko mascot backed by Neo4j GraphRAG. He knows the menu, the pantry, trend velocity, every vetted creator (including
-            ones found live through Treg) and this week&apos;s rival complaints.
+            I&apos;m a Masko mascot running on your Neo4j knowledge graph. I know your menu and pantry, which trends are rising,
+            every creator I&apos;ve vetted (including ones found live through Treg) and what your rivals&apos; diners complain about.
           </p>
         </div>
 
@@ -155,6 +160,11 @@ export const TrackChefPepper: React.FC = () => {
                   <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-neutral-900 border border-neutral-800 px-3.5 py-2.5">
                     <p className="text-sm text-neutral-100 leading-relaxed">{m.text}</p>
                     {m.queries && m.queries.length > 0 && <Trace queries={m.queries} />}
+                    {m.sources && m.sources.length > 0 && (
+                      <div className="mt-1.5">
+                        <FreshnessLine items={m.sources} />
+                      </div>
+                    )}
                   </div>
                 </div>
               )

@@ -86,6 +86,65 @@ export const TrackHeader: React.FC<{ icon: React.ReactNode; title: string; subti
   </div>
 );
 
+/** Placeholder blocks shown while a panel's data loads, so the layout appears at once. */
+export const Skeleton: React.FC<{ label: string; cards?: number; side?: boolean }> = ({ label, cards = 3, side = true }) => (
+  <div className="space-y-3" aria-busy="true" aria-label={label}>
+    <div className="text-[11px] text-neutral-500 flex items-center gap-2">
+      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" /> {label}
+    </div>
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className={`${side ? "lg:col-span-5" : "lg:col-span-12"} space-y-3`}>
+        {Array.from({ length: cards }).map((_, i) => (
+          <div key={i} className="p-3.5 rounded-xl border border-neutral-800 bg-neutral-900/40 animate-pulse space-y-2">
+            <div className="h-3 w-24 rounded bg-neutral-800" />
+            <div className="h-4 w-2/3 rounded bg-neutral-800" />
+            <div className="h-3 w-1/2 rounded bg-neutral-800/70" />
+          </div>
+        ))}
+      </div>
+      {side && (
+        <div className="lg:col-span-7 p-4 rounded-xl border border-neutral-800 bg-neutral-900/40 animate-pulse space-y-3">
+          <div className="h-5 w-1/2 rounded bg-neutral-800" />
+          <div className="h-3 w-full rounded bg-neutral-800/70" />
+          <div className="h-3 w-5/6 rounded bg-neutral-800/70" />
+          <div className="h-24 w-full rounded-lg bg-neutral-800/50" />
+        </div>
+      )}
+    </div>
+  </div>
+);
+
+export interface Freshness {
+  key: string;
+  label: string;
+  source: string;
+  at: string | null;
+}
+
+function ago(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  // Date-only values (e.g. "2026-11-22") are checks, not timestamps
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  const mins = Math.round((Date.now() - d.getTime()) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  if (mins < 24 * 60) return `${Math.round(mins / 60)} h ago`;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+/** Where the data behind a panel or answer came from, and how fresh it is. */
+export const FreshnessLine: React.FC<{ items?: Freshness[] | null }> = ({ items }) =>
+  items && items.length ? (
+    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-neutral-500">
+      {items.map((f) => (
+        <span key={f.key}>
+          {f.label}: {f.source} · {f.at ? ago(f.at) : "not fetched yet"}
+        </span>
+      ))}
+    </div>
+  ) : null;
+
 export const ErrorNote: React.FC<{ message: string }> = ({ message }) => (
   <div className="p-3 rounded-lg bg-rose-950/30 border border-rose-500/30 text-xs text-rose-300">{message}</div>
 );

@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from "react";
 import { Users, CheckCircle2, XCircle, Copy, Check, MapPin, Radar, ExternalLink } from "lucide-react";
 import type { RestaurantProfile, VettedCreator } from "@/types";
-import { CypherTrace, TrackHeader, ErrorNote, getJson } from "./ui";
+import { CypherTrace, TrackHeader, ErrorNote, getJson, Skeleton, FreshnessLine } from "./ui";
+import type { Freshness } from "./ui";
 
 interface ScanStatus {
   tregConfigured: boolean;
@@ -13,6 +14,7 @@ interface ScanStatus {
 }
 
 interface CreatorsData {
+  freshness?: Freshness[];
   restaurant: RestaurantProfile;
   creators: VettedCreator[];
   featuredDish: string | null;
@@ -140,7 +142,8 @@ export const TrackCreatorScout: React.FC = () => {
       />
 
       {error && <ErrorNote message={error} />}
-      {!data && !error && <div className="text-xs text-neutral-500 animate-pulse">Vetting local creators…</div>}
+      {!data && !error && <Skeleton label="Vetting creators from the graph…" cards={4} />}
+      {data && <FreshnessLine items={data.freshness} />}
 
       {data && (
         <div className="p-3.5 rounded-xl border border-fuchsia-500/30 bg-fuchsia-950/10 flex flex-col sm:flex-row sm:items-center gap-3">

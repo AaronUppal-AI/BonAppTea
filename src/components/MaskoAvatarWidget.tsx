@@ -20,7 +20,7 @@ export const MaskoAvatarWidget: React.FC<MaskoWidgetProps> = ({
     mascotName: "Chef Pepper",
     imageUrl: "/masko/chef-pepper.png",
     mood: "idle",
-    currentSpeech: "Ciao! I'm Chef Pepper. Every answer I give comes straight from your restaurant's knowledge graph. Ask me what to film, who to invite, or how to fill a slow Tuesday.",
+    currentSpeech: "Hi chef! I'm Chef Pepper. Every answer I give comes straight from your restaurant's knowledge graph. Ask me what to film, who to invite, or how to fill a slow night.",
     isVoiceActive: false,
   });
 

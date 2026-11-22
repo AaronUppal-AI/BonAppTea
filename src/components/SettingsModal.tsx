@@ -22,7 +22,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   useEffect(() => {
     if (!isOpen) return;
     setStatus(null);
-    fetch("/api/status")
+    fetch("/api/status?check=1")
       .then((r) => r.json())
       .then(setStatus)
       .catch(() => setStatus(null));

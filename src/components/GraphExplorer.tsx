@@ -302,7 +302,16 @@ export const GraphExplorer: React.FC<Props> = ({ height = 420, focus = null, def
         <div ref={containerRef} className="absolute inset-0" />
         {error && <div className="absolute inset-0 flex items-center justify-center text-xs text-rose-300">{error}</div>}
         {!data && !error && (
-          <div className="absolute inset-0 flex items-center justify-center text-xs text-neutral-500 animate-pulse">Loading graph…</div>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3" aria-busy="true">
+            <div className="relative w-40 h-24 animate-pulse">
+              {[
+                [10, 40], [60, 10], [110, 45], [70, 70], [140, 15], [30, 80],
+              ].map(([x, y], i) => (
+                <span key={i} className="absolute w-3 h-3 rounded-full bg-neutral-700" style={{ left: x, top: y }} />
+              ))}
+            </div>
+            <span className="text-[11px] text-neutral-500">Loading the knowledge graph from Neo4j…</span>
+          </div>
         )}
 
         {selected && (

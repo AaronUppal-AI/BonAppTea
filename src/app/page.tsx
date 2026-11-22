@@ -92,8 +92,8 @@ export default function Home() {
 
       <footer className="border-t border-neutral-900 bg-neutral-950/80 py-4 text-xs text-neutral-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>BonAppTea · Built for the You.com Hackathon</span>
-          <span className="text-neutral-400">You.com Search · Neo4j GraphRAG · Masko · Treg</span>
+          <span>BonAppTea · Fill your slow shifts with trends, creators and rival intel</span>
+          <span className="text-neutral-400">Data: restaurant website · Google Maps &amp; Instagram via Treg · You.com · Neo4j</span>
         </div>
       </footer>
 

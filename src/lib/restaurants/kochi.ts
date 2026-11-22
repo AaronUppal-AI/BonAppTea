@@ -33,6 +33,8 @@ export const KOCHI = {
     sister_restaurants: ["Mari"],
     google_place_id: "ChIJN8SzjFRZwokR-b5lqNXcg44",
     instagram_location_id: "869095460127552",
+    // When the menu and facts above were last checked against the website
+    facts_checked: "2026-11-22",
   },
   city: "New York",
   neighborhoods: [

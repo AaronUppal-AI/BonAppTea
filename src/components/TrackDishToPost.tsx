@@ -3,9 +3,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Clapperboard, Music, Hash, Copy, Check } from "lucide-react";
 import type { PostPlan, RestaurantProfile, YouSearchResponse } from "@/types";
-import { YouSources, CypherTrace, TrackHeader, ErrorNote, stageStyle, getJson } from "./ui";
+import { YouSources, CypherTrace, TrackHeader, ErrorNote, stageStyle, getJson, Skeleton, FreshnessLine } from "./ui";
+import type { Freshness } from "./ui";
 
 interface PlansData {
+  freshness?: Freshness[];
   restaurant: RestaurantProfile;
   plans: PostPlan[];
   cypher: string;
@@ -90,7 +92,8 @@ export const TrackDishToPost: React.FC<{ focusTrend?: string | null }> = ({ focu
       />
 
       {error && <ErrorNote message={error} />}
-      {!data && !error && <div className="text-xs text-neutral-500 animate-pulse">Matching your menu to trends…</div>}
+      {!data && !error && <Skeleton label="Matching your menu to trends…" side={true} />}
+      {data && <FreshnessLine items={data.freshness} />}
 
       {data && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

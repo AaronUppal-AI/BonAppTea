@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Network, Route } from "lucide-react";
 import type { Insight } from "@/types";
 import { GraphExplorer, GraphFocus } from "./GraphExplorer";
-import { TrackHeader, ErrorNote, getJson } from "./ui";
+import { TrackHeader, ErrorNote, getJson, Skeleton } from "./ui";
 
 const KIND: Record<Insight["kind"], { label: string; style: string }> = {
   conquest: { label: "Conquest", style: "bg-sky-500/15 text-sky-300 border-sky-500/30" },
@@ -45,7 +45,7 @@ export const TrackKnowledgeGraph: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         <div className="lg:col-span-4 space-y-2 lg:max-h-[620px] lg:overflow-y-auto pr-1">
-          {!data && !error && <div className="text-xs text-neutral-500 animate-pulse">Walking the graph…</div>}
+          {!data && !error && <Skeleton label="Walking the graph for opportunities…" cards={4} side={false} />}
           {active && (
             <button onClick={() => setActive(null)} className="text-[11px] text-neutral-400 hover:text-white">
               ✕ Clear highlight

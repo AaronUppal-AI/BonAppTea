@@ -115,6 +115,7 @@ export const AboutModal: React.FC<Props> = ({ isOpen, section, onClose }) => {
         </div>
 
         <div ref={scrollRef} className="overflow-y-auto px-6 pb-8">
+          <p className="mt-5 text-[11px] uppercase tracking-wider text-rose-300/80">Built for the You.com Hackathon</p>
           {/* About */}
           <H>Inspiration</H>
           <P>

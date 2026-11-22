@@ -111,6 +111,14 @@ const SEED_CYPHER: string[] = [
    MERGE (st)-[:ADDRESSES]->(t)`,
 ];
 
+// One cheap read to decide whether the prune below is needed at all.
+const FOREIGN_DATA_CHECK = `
+RETURN EXISTS { MATCH (r:Restaurant) WHERE r.id <> $rid }
+    OR EXISTS { MATCH (t:FoodTrend) WHERE NOT t.id IN $trendIds }
+    OR EXISTS { MATCH (c:LocalCreator) WHERE coalesce(c.source, 'seed') <> 'treg' }
+    OR EXISTS { MATCH (c:Competitor) WHERE coalesce(c.source, 'seed') <> 'treg' }
+    OR EXISTS { MATCH ()-[x:LOCATED_IN|COMPETES_IN|AUDIENCE_LOCATED_IN|PROMOTED]->() } AS foreign`;
+
 const PRUNE_CYPHER: string[] = [
   `MATCH (r:Restaurant) WHERE r.id <> $rid DETACH DELETE r`,
   `MATCH (t:FoodTrend) WHERE NOT t.id IN $trendIds DETACH DELETE t`,
@@ -150,9 +158,13 @@ export async function ensureHospitalitySeed(driver: Driver, restaurantId: string
         }
         // Remove anything an older deployment (or another restaurant's seed) left in the shared database.
         if (restaurantId === DEFAULT_RESTAURANT_ID) {
-          await session.executeWrite(async (tx) => {
-            for (const stmt of PRUNE_CYPHER) await tx.run(stmt, { rid: restaurantId, trendIds: KOCHI.trends.map((t) => t.id) });
-          });
+          const params = { rid: restaurantId, trendIds: KOCHI.trends.map((t) => t.id) };
+          const leftovers = await session.run(FOREIGN_DATA_CHECK, params);
+          if (leftovers.records[0]?.get("foreign")) {
+            await session.executeWrite(async (tx) => {
+              for (const stmt of PRUNE_CYPHER) await tx.run(stmt, params);
+            });
+          }
         }
         seededFor = restaurantId;
       } finally {
@@ -651,6 +663,38 @@ export async function getInsights(driver: Driver, rid = DEFAULT_RESTAURANT_ID): 
 }
 
 // ---------------------------------------------------------------------------
+// Data freshness: where each kind of data came from and when it was last refreshed
+// ---------------------------------------------------------------------------
+
+export interface FreshnessItem {
+  key: "menu" | "rivals" | "creators" | "trendProof";
+  label: string;
+  source: string;
+  at: string | null;
+}
+
+export async function getFreshness(driver: Driver, rid = DEFAULT_RESTAURANT_ID): Promise<Record<FreshnessItem["key"], FreshnessItem>> {
+  await ensureHospitalitySeed(driver, rid);
+  const [row] = await runCypher(
+    driver,
+    `MATCH (r:Restaurant {id: $rid})
+     WITH r,
+          [(r)-[:IN]->(:Neighborhood)<-[:IN]-(c:Competitor) | c.scanned_at] AS rivalTimes,
+          [(:FoodTrend)-[e:EVIDENCED_BY]->(:WebSource) | e.retrieved_at] AS proofTimes
+     RETURN toString(r.last_creator_scan_at) AS creatorsAt,
+            toString(reduce(m = null, x IN rivalTimes | CASE WHEN m IS NULL OR x > m THEN x ELSE m END)) AS rivalsAt,
+            toString(reduce(m = null, x IN proofTimes | CASE WHEN m IS NULL OR x > m THEN x ELSE m END)) AS proofAt`,
+    { rid }
+  );
+  return {
+    menu: { key: "menu", label: "Menu & facts", source: "restaurant website", at: KOCHI.restaurant.facts_checked },
+    rivals: { key: "rivals", label: "Rival reviews", source: "Google Maps via Treg", at: row?.rivalsAt ?? null },
+    creators: { key: "creators", label: "Creators", source: "Instagram via Treg", at: row?.creatorsAt ?? null },
+    trendProof: { key: "trendProof", label: "Trend proof", source: "You.com", at: row?.proofAt ?? null },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Chef Pepper: questions answered from the same graph queries as the tabs
 // ---------------------------------------------------------------------------
 
@@ -662,7 +706,18 @@ export interface GraphAnswer {
   mood: Mood;
   intent: Intent;
   graph: { source: "neo4j"; queries: { name: string; cypher: string; rows: unknown[] }[] };
+  /** The data sources behind this answer and when each was last refreshed */
+  sources: FreshnessItem[];
 }
+
+const INTENT_SOURCES: Record<Intent, FreshnessItem["key"][]> = {
+  trends: ["menu", "trendProof"],
+  creators: ["creators"],
+  competitors: ["rivals"],
+  post: ["menu", "trendProof"],
+  "slow-shift": ["menu", "trendProof", "creators"],
+  overview: ["menu", "rivals", "creators", "trendProof"],
+};
 
 export function detectIntent(message: string): Intent {
   const m = message.toLowerCase();
@@ -739,8 +794,13 @@ RETURN COUNT { (r)-[:SERVES]->() } AS menuItems,
        COUNT { MATCH (:Competitor)-[:IN]->(home) } AS competitors`;
 
 export async function answerWithGraph(driver: Driver, message: string, rid = DEFAULT_RESTAURANT_ID): Promise<GraphAnswer> {
-  await ensureHospitalitySeed(driver, rid);
   const intent = detectIntent(message);
+  const [answer, freshness] = await Promise.all([answerIntent(driver, intent, rid), getFreshness(driver, rid)]);
+  return { ...answer, sources: INTENT_SOURCES[intent].map((k) => freshness[k]) };
+}
+
+async function answerIntent(driver: Driver, intent: Intent, rid: string): Promise<Omit<GraphAnswer, "sources">> {
+  await ensureHospitalitySeed(driver, rid);
   const trace = (name: string, cypher: string, rows: unknown[]) => ({ name, cypher: cypher.trim(), rows });
 
   switch (intent) {
