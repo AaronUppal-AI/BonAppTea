@@ -52,19 +52,35 @@ Open http://localhost:3000. On the first question, Chef Pepper seeds a demo East
 
 ```
 src/
-├── app/api/masko/chat/      # Chef Pepper: question → Cypher → grounded reply
-├── app/api/graph/           # Graph data and Neo4j status/seed
-├── components/              # Header, tracks, graph visualizer, mascot widget
+├── app/api/
+│   ├── radar/               # Trend board + You.com trend evidence
+│   ├── post/                # Dish-to-post plans + You.com filming references
+│   ├── creators/            # Creator vetting
+│   ├── intel/               # Rival complaints, neighborhood news, claim check
+│   ├── masko/chat/          # Chef Pepper: question → Cypher → grounded reply
+│   ├── graph/               # Read-only graph view, seed
+│   └── status/              # Which services are configured (no key values)
+├── components/              # Header, four tabs, graph view, mascot widget
 └── lib/
-    ├── hospitalityGraph.ts  # Restaurant graph seed + GraphRAG queries
-    ├── neo4jClient.ts       # AuraDB driver
-    ├── tregGateway.ts       # Treg connector
-    └── youSearch.ts         # You.com connector
+    ├── hospitalityGraph.ts  # Restaurant graph seed + every Cypher query
+    ├── youSearch.ts         # You.com Search connector + restaurant searches
+    └── neo4jClient.ts       # AuraDB driver
 ```
+
+## The four tabs
+
+| Tab | From Neo4j | From You.com (live) |
+| :--- | :--- | :--- |
+| **Trend Radar** | Trend lifecycle board (Emerging → Saturated) matched against the pantry | Web proof per trend (last month) and the city's food buzz (last week) |
+| **Dish-to-Post** | Best trend match per dish (≥ 2 shared ingredients), hook, audio, 3-clip shot list, caption, hashtags | How others are filming that trend |
+| **Creator Scout** | Every creator vetted, with pass/fail reasons, plus a copyable VIP invite for a slow shift | — |
+| **Intel Desk** | Rival complaints this week paired with the restaurant's strengths | Neighborhood restaurant news (last month) and sources for fact-checking a menu claim |
+
+You.com results are never faked: if `YOU_API_KEY` is missing or a search fails, the panel says so. Each graph panel can show the Cypher query behind it.
 
 ## Status
 
-Chef Pepper's GraphRAG chat is live against Neo4j. The four Track tabs and the judge demo still use demo data from the project's earlier creator-economy version and are being moved over to the restaurant use case.
+Restaurant, creator, trend and competitor data in the graph is demo seed data for one East Village restaurant. Live creator discovery from geo-tagged posts (Treg) is next.
 
 ## License
 

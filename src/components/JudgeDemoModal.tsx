@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Play, CheckCircle2, ArrowRight, Sparkles, Radio, Cpu, Search, X } from "lucide-react";
+import { X, ChevronRight, ChevronLeft } from "lucide-react";
 import { TrackType } from "@/types";
 
 interface JudgeDemoModalProps {
@@ -10,169 +10,93 @@ interface JudgeDemoModalProps {
   onNavigateTrack: (track: TrackType) => void;
 }
 
-export const JudgeDemoModal: React.FC<JudgeDemoModalProps> = ({
-  isOpen,
-  onClose,
-  onNavigateTrack,
-}) => {
-  const [currentStep, setCurrentStep] = useState(0);
+const STEPS: { time: string; track: TrackType; title: string; say: string; show: string }[] = [
+  {
+    time: "0:00 – 0:45",
+    track: "trend-radar",
+    title: "Trend Radar: catch it before it peaks",
+    say: "Osteria Pepe already stocks mascarpone, espresso and ladyfingers. The graph says Tableside Tiramisu is accelerating, so they can add it this weekend with zero new inventory.",
+    show: "Click Tableside Tiramisu. Point at the pantry match, then the You.com web-proof links showing the trend is real and current.",
+  },
+  {
+    time: "0:45 – 1:30",
+    track: "dish-to-post",
+    title: "Dish-to-Post: a shot list the chef can film in 10 seconds",
+    say: "Chefs are not videographers. BonAppTea pairs the dish with the trend's hook and hands them three clips, a caption, hashtags and the audio to use.",
+    show: "Show the Tiramisu shot list, copy the caption, then scroll to the You.com filming references.",
+  },
+  {
+    time: "1:30 – 2:15",
+    track: "creator-scout",
+    title: "Creator Scout: stop comping freeloaders",
+    say: "Six creators, three worth a table. The graph drops the 240k account with 11% local reach and the one who promoted a rival 20 days ago.",
+    show: "Point at the filtered-out reasons, then copy the VIP invite for the slow Tuesday dinner.",
+  },
+  {
+    time: "2:15 – 3:00",
+    track: "intel-desk",
+    title: "Intel Desk + Chef Pepper: exploit rival weak spots",
+    say: "Lucky Slice is getting roasted for wait times; we have walk-in tables at 5 PM. And before posting 'San Marzano DOP', we check it against live sources.",
+    show: "Run a fact-check example, then ask Chef Pepper how to fill slow Tuesday nights and expand the Neo4j query behind his answer.",
+  },
+];
 
+export const JudgeDemoModal: React.FC<JudgeDemoModalProps> = ({ isOpen, onClose, onNavigateTrack }) => {
+  const [step, setStep] = useState(0);
   if (!isOpen) return null;
+  const s = STEPS[step];
 
-  const demoSteps = [
-    {
-      title: "1. The Hook & The Creator Dilemma",
-      time: "0:00 - 0:45",
-      icon: Sparkles,
-      track: "idea-to-post" as TrackType,
-      summary: "Generic AI tools are amnesiacs trapped in static data. When a creator gets a viral tip or breaking rumor, existing tools hallucinate or repeat outdated tweets.",
-      actionPrompt: "Show Track 1: Creator inputs a raw hypothesis about local reasoning models.",
-      highlight: "Notice how You.com context is injected in real time (within 12 hours of GitHub release).",
-    },
-    {
-      title: "2. The Trend Radar & Content Gap",
-      time: "0:45 - 1:30",
-      icon: Radio,
-      track: "trend-radar" as TrackType,
-      summary: "BonAppTea scans Reddit, X, and search velocity via Treg. Rather than just reporting a keyword, it detects the exact 'Content Gap'—what competitor YouTube videos missed.",
-      actionPrompt: "Show Track 2: Local reasoning models spike +410%, exposing unanswered questions about 16GB Mac RAM limits.",
-      highlight: "Neo4j Graph connects the accelerating topic directly to primary arXiv papers.",
-    },
-    {
-      title: "3. Research Desk & Rumor Debunking",
-      time: "1:30 - 2:15",
-      icon: Search,
-      track: "research-desk" as TrackType,
-      summary: "Creator tests a viral rumor: 'OpenAI bought a German robotics startup for $1.2B'. In sub-second time, You.com crawls primary SEC records and Reuters denials.",
-      actionPrompt: "Show Track 4: The claim node flashes RED on the Graph, saving the creator from brand cancellation.",
-      highlight: "Masko Mascot speaks up to alert the creator and suggests a pivot.",
-    },
-    {
-      title: "4. Creator Business & Zero-Markup Leads",
-      time: "2:15 - 3:00",
-      icon: Cpu,
-      track: "creator-business" as TrackType,
-      summary: "BonAppTea identifies which brands are actively sponsoring content in this niche (Neon, Together AI, Supabase) and enriches the decision-maker via Treg for $0.038.",
-      actionPrompt: "Show Track 3: 1-click tailored pitch + live interactive media kit (plate.bio/@aaron) powered by Masko.",
-      highlight: "83.7% Software Gross Margins thanks to You.com speed and Treg pay-per-call gateway.",
-    },
-  ];
-
-  const step = demoSteps[currentStep];
-  const StepIcon = step.icon;
-
-  const handleNext = () => {
-    if (currentStep < demoSteps.length - 1) {
-      const nextStep = currentStep + 1;
-      setCurrentStep(nextStep);
-      onNavigateTrack(demoSteps[nextStep].track);
-    } else {
-      onClose();
-    }
-  };
-
-  const handlePrev = () => {
-    if (currentStep > 0) {
-      const prevStep = currentStep - 1;
-      setCurrentStep(prevStep);
-      onNavigateTrack(demoSteps[prevStep].track);
-    }
+  const go = (i: number) => {
+    setStep(i);
+    onNavigateTrack(STEPS[i].track);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-2xl rounded-2xl bg-neutral-950 border border-neutral-800 shadow-2xl p-6 space-y-5">
-        {/* Modal Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
-              <Play className="w-4 h-4 fill-amber-400" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-white">3-Minute Hackathon Judge Walkthrough</h3>
-              <span className="text-[10px] text-amber-400 font-mono">
-                Step {currentStep + 1} of 4 • {step.time}
-              </span>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-neutral-400 hover:text-white p-1 rounded-lg bg-neutral-900 border border-neutral-800 text-xs"
-          >
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-lg rounded-2xl border border-neutral-800 bg-neutral-950 shadow-2xl">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-800">
+          <span className="text-sm font-bold text-white">
+            3-minute demo · step {step + 1} of {STEPS.length}
+          </span>
+          <button onClick={onClose} className="text-neutral-400 hover:text-white">
             <X className="w-4 h-4" />
           </button>
         </div>
-
-        {/* Step Progress Bar */}
-        <div className="grid grid-cols-4 gap-2">
-          {demoSteps.map((s, idx) => (
-            <button
-              key={idx}
-              onClick={() => {
-                setCurrentStep(idx);
-                onNavigateTrack(s.track);
-              }}
-              className={`h-1.5 rounded-full transition-all ${
-                idx === currentStep
-                  ? "bg-amber-400"
-                  : idx < currentStep
-                  ? "bg-amber-500/40"
-                  : "bg-neutral-800"
-              }`}
-            />
-          ))}
-        </div>
-
-        {/* Step Content */}
-        <div className="p-4 rounded-xl bg-neutral-900/60 border border-neutral-800 space-y-3">
-          <div className="flex items-center space-x-2 text-white font-bold text-sm">
-            <StepIcon className="w-4 h-4 text-amber-400" />
-            <span>{step.title}</span>
+        <div className="p-5 space-y-3">
+          <div className="text-[11px] font-mono text-amber-400">{s.time}</div>
+          <h3 className="text-base font-bold text-white">{s.title}</h3>
+          <div className="text-xs text-neutral-300 leading-relaxed">
+            <span className="text-neutral-500 uppercase text-[10px] block mb-0.5">Say</span>
+            {s.say}
           </div>
-
-          <p className="text-xs text-neutral-300 leading-relaxed">{step.summary}</p>
-
-          <div className="p-3 rounded-lg bg-neutral-950 border border-neutral-800 space-y-1">
-            <span className="text-[10px] font-mono uppercase text-amber-400 font-bold block">
-              Presenter Action & Demonstration:
-            </span>
-            <p className="text-xs text-neutral-200 font-medium">{step.actionPrompt}</p>
-          </div>
-
-          <div className="p-2.5 rounded-lg bg-indigo-950/20 border border-indigo-500/30 text-xs text-indigo-300">
-            💡 <strong>Judge Note:</strong> {step.highlight}
+          <div className="text-xs text-neutral-300 leading-relaxed">
+            <span className="text-neutral-500 uppercase text-[10px] block mb-0.5">Show</span>
+            {s.show}
           </div>
         </div>
-
-        {/* Navigation Buttons */}
-        <div className="flex items-center justify-between pt-2">
+        <div className="flex items-center justify-between px-5 py-3 border-t border-neutral-800">
           <button
-            onClick={handlePrev}
-            disabled={currentStep === 0}
-            className="px-3 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-xs text-neutral-400 hover:text-white transition disabled:opacity-30"
+            onClick={() => go(step - 1)}
+            disabled={step === 0}
+            className="text-xs text-neutral-300 disabled:opacity-30 flex items-center gap-1"
           >
-            Previous
+            <ChevronLeft className="w-3.5 h-3.5" /> Back
           </button>
-
-          <div className="flex items-center space-x-2">
+          <button onClick={() => onNavigateTrack(s.track)} className="text-xs text-amber-300 hover:text-amber-200">
+            Open this tab
+          </button>
+          {step < STEPS.length - 1 ? (
             <button
-              onClick={() => {
-                onNavigateTrack(step.track);
-                onClose();
-              }}
-              className="px-3 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-xs text-neutral-200 hover:text-white transition"
+              onClick={() => go(step + 1)}
+              className="text-xs px-3 py-1.5 rounded-lg bg-amber-500 text-black font-semibold flex items-center gap-1"
             >
-              Jump to Track
+              Next <ChevronRight className="w-3.5 h-3.5" />
             </button>
-
-            <button
-              onClick={handleNext}
-              className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold transition flex items-center space-x-1.5 shadow-md shadow-amber-500/20"
-            >
-              <span>{currentStep === demoSteps.length - 1 ? "Finish Demo" : "Next Step"}</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+          ) : (
+            <button onClick={onClose} className="text-xs px-3 py-1.5 rounded-lg bg-amber-500 text-black font-semibold">
+              Done
             </button>
-          </div>
+          )}
         </div>
       </div>
     </div>

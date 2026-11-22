@@ -8,7 +8,7 @@ import neo4j, { Driver } from "neo4j-driver";
  */
 
 export const DEFAULT_RESTAURANT_ID = "rest-osteria-pepe";
-const SEED_VERSION = 1;
+const SEED_VERSION = 2;
 
 // ---------------------------------------------------------------------------
 // Seed data: one demo East Village restaurant and its neighborhood graph
@@ -20,6 +20,7 @@ const SEED = {
     name: "Osteria Pepe",
     cuisine: "Italian",
     neighborhood: "East Village",
+    city: "New York",
     avg_check: 68,
     slow_shifts: ["Tuesday dinner", "Wednesday lunch", "5:00 PM seatings"],
   },
@@ -104,6 +105,7 @@ const SEED_CYPHER: string[] = [
    MERGE (a)-[:ADJACENT_TO]->(b)`,
   `MERGE (r:Restaurant {id: $restaurant.id})
    SET r.name = $restaurant.name, r.cuisine = $restaurant.cuisine, r.avg_check = $restaurant.avg_check,
+       r.city = $restaurant.city,
        r.slow_shifts = $restaurant.slow_shifts, r.seed_version = $seedVersion
    WITH r MATCH (n:Neighborhood {name: $restaurant.neighborhood}) MERGE (r)-[:LOCATED_IN]->(n)`,
   `MATCH (r:Restaurant {id: $restaurant.id})
@@ -211,6 +213,7 @@ LIMIT 3`,
 MATCH (r:Restaurant {id: $rid})-[:SERVES]->(m:MenuItem)-[:FEATURING]->(i:Ingredient)<-[:REQUIRES]-(t:FoodTrend)
 WHERE t.stage IN ['Emerging', 'Accelerating']
 WITH m, t, count(i) AS overlap
+WHERE overlap >= 2
 RETURN m.name AS dish, m.margin AS margin, t.name AS trend, t.velocity_pct AS velocity,
        t.hook AS hook, t.audio AS audio, t.visual_format AS format, overlap
 ORDER BY overlap DESC, velocity DESC
@@ -333,6 +336,198 @@ export async function answerWithGraph(driver: Driver, message: string, rid = DEF
   const q = await runQuery(driver, intent, rid);
   const speak = { trends: speakTrends, creators: speakCreators, competitors: speakCompetitors, post: speakPost, overview: speakOverview }[intent];
   return { ...speak(q.rows), intent, graph: { source: "neo4j", queries: [q] } };
+}
+
+// ---------------------------------------------------------------------------
+// Track data: what each BonAppTea tab reads from the graph
+// ---------------------------------------------------------------------------
+
+async function runCypher(driver: Driver, cypher: string, params: Record<string, unknown>) {
+  const session = driver.session({ defaultAccessMode: neo4j.session.READ });
+  try {
+    const res = await session.run(cypher, params);
+    return res.records.map((r) => toPlain(r.toObject()) as any);
+  } finally {
+    await session.close();
+  }
+}
+
+export interface RestaurantProfile {
+  id: string;
+  name: string;
+  cuisine: string;
+  neighborhood: string;
+  city: string;
+  avgCheck: number;
+  slowShifts: string[];
+}
+
+export async function getRestaurant(driver: Driver, rid = DEFAULT_RESTAURANT_ID): Promise<RestaurantProfile> {
+  await ensureHospitalitySeed(driver, rid);
+  const [row] = await runCypher(
+    driver,
+    `MATCH (r:Restaurant {id: $rid})-[:LOCATED_IN]->(n:Neighborhood)
+     RETURN r.id AS id, r.name AS name, r.cuisine AS cuisine, n.name AS neighborhood,
+            coalesce(r.city, 'New York') AS city, r.avg_check AS avgCheck, r.slow_shifts AS slowShifts`,
+    { rid }
+  );
+  if (!row) throw new Error(`Restaurant ${rid} not found in the graph`);
+  return row;
+}
+
+export const TREND_BOARD_CYPHER = `
+MATCH (r:Restaurant {id: $rid})
+MATCH (t:FoodTrend)-[:REQUIRES]->(i:Ingredient)
+WITH r, t, collect(i.name) AS needed,
+     collect(CASE WHEN EXISTS { (r)-[:STOCKS]->(i) } THEN i.name END) AS have
+RETURN t.id AS id, t.name AS name, t.stage AS stage, t.velocity_pct AS velocity,
+       t.visual_format AS format, t.hook AS hook, t.audio AS audio,
+       t.est_weekly_revenue AS weeklyRevenue, have, [x IN needed WHERE NOT x IN have] AS missing
+ORDER BY velocity DESC`;
+
+export interface BoardTrend {
+  id: string;
+  name: string;
+  stage: "Emerging" | "Accelerating" | "Mainstream" | "Saturated";
+  velocity: number;
+  format: string;
+  hook: string;
+  audio: string;
+  weeklyRevenue: number;
+  have: string[];
+  missing: string[];
+}
+
+export async function getTrendBoard(driver: Driver, rid = DEFAULT_RESTAURANT_ID): Promise<BoardTrend[]> {
+  await ensureHospitalitySeed(driver, rid);
+  return runCypher(driver, TREND_BOARD_CYPHER, { rid });
+}
+
+export const POST_PLANS_CYPHER = `
+MATCH (r:Restaurant {id: $rid})-[:SERVES]->(m:MenuItem)
+OPTIONAL MATCH (m)-[:FEATURING]->(i:Ingredient)<-[:REQUIRES]-(t:FoodTrend)
+WHERE t.stage IN ['Emerging', 'Accelerating']
+WITH m, t, count(i) AS overlap
+ORDER BY overlap DESC, t.velocity_pct DESC
+// One shared staple (cream, eggs) is not a real match; require two.
+WITH m, collect(CASE WHEN t IS NULL OR overlap < 2 THEN NULL ELSE {
+  trend: t.name, stage: t.stage, velocity: t.velocity_pct, hook: t.hook,
+  audio: t.audio, format: t.visual_format, overlap: overlap } END) AS matches
+RETURN m.id AS id, m.name AS dish, m.price AS price, m.margin AS margin,
+       [(m)-[:FEATURING]->(x:Ingredient) | x.name] AS ingredients, matches[0] AS best
+ORDER BY best IS NULL, best.velocity DESC`;
+
+export interface PostPlan {
+  id: string;
+  dish: string;
+  price: number;
+  margin: number;
+  ingredients: string[];
+  best: { trend: string; stage: string; velocity: number; hook: string; audio: string; format: string; overlap: number } | null;
+}
+
+export async function getPostPlans(driver: Driver, rid = DEFAULT_RESTAURANT_ID): Promise<PostPlan[]> {
+  await ensureHospitalitySeed(driver, rid);
+  return runCypher(driver, POST_PLANS_CYPHER, { rid });
+}
+
+export const CREATOR_VETTING_CYPHER = `
+MATCH (r:Restaurant {id: $rid})-[:LOCATED_IN]->(home:Neighborhood)
+MATCH (c:LocalCreator)-[:AUDIENCE_LOCATED_IN]->(n:Neighborhood)
+OPTIONAL MATCH (c)-[p:PROMOTED]->(comp:Competitor)-[:COMPETES_IN]->(home)
+RETURN c.handle AS handle, c.followers AS followers, c.local_audience_pct AS localPct,
+       c.engagement_rate AS engagement, n.name AS audienceHood,
+       CASE WHEN n = home THEN 'home'
+            WHEN EXISTS { (home)-[:ADJACENT_TO]-(n) } THEN 'adjacent'
+            ELSE 'outside' END AS proximity,
+       comp.name AS rival, p.days_ago AS rivalDaysAgo`;
+
+export interface VettedCreator {
+  handle: string;
+  followers: number;
+  localPct: number;
+  engagement: number;
+  audienceHood: string;
+  proximity: "home" | "adjacent" | "outside";
+  rival: string | null;
+  rivalDaysAgo: number | null;
+  passed: boolean;
+  reasons: string[];
+  score: number;
+}
+
+/** Same rules Chef Pepper uses: 5k–30k followers, ≥70% local, nearby audience, no rival promo in 60 days. */
+export async function getCreatorVetting(driver: Driver, rid = DEFAULT_RESTAURANT_ID): Promise<VettedCreator[]> {
+  await ensureHospitalitySeed(driver, rid);
+  const rows = await runCypher(driver, CREATOR_VETTING_CYPHER, { rid });
+  return rows
+    .map((c: any) => {
+      const reasons: string[] = [];
+      if (c.followers < 5000) reasons.push("Under 5k followers");
+      if (c.followers > 30000) reasons.push(`${Math.round(c.followers / 1000)}k followers: not a micro-creator`);
+      if (c.localPct < 70) reasons.push(`Only ${c.localPct}% local audience`);
+      if (c.proximity === "outside") reasons.push(`Audience is in ${c.audienceHood}, outside your area`);
+      if (c.rival && c.rivalDaysAgo !== null && c.rivalDaysAgo <= 60)
+        reasons.push(`Promoted ${c.rival} ${c.rivalDaysAgo} days ago`);
+      return { ...c, passed: reasons.length === 0, reasons, score: Math.round(c.localPct * c.engagement) / 10 };
+    })
+    .sort((a: VettedCreator, b: VettedCreator) => Number(b.passed) - Number(a.passed) || b.score - a.score);
+}
+
+export const RIVAL_INTEL_CYPHER = `
+MATCH (r:Restaurant {id: $rid})-[:LOCATED_IN]->(home:Neighborhood)<-[:COMPETES_IN]-(comp:Competitor)
+MATCH (comp)-[h:HAS_COMPLAINT]->(cp:Complaint)
+OPTIONAL MATCH (r)-[:HAS_STRENGTH]->(s:Strength {theme: cp.theme})
+RETURN comp.name AS competitor, comp.cuisine AS cuisine, cp.theme AS theme, cp.sample AS sample,
+       h.count_7d AS mentions, s.pitch AS ourAnswer
+ORDER BY mentions DESC`;
+
+export interface RivalComplaint {
+  competitor: string;
+  cuisine: string;
+  theme: string;
+  sample: string;
+  mentions: number;
+  ourAnswer: string | null;
+}
+
+export async function getRivalIntel(driver: Driver, rid = DEFAULT_RESTAURANT_ID): Promise<RivalComplaint[]> {
+  await ensureHospitalitySeed(driver, rid);
+  return runCypher(driver, RIVAL_INTEL_CYPHER, { rid });
+}
+
+/** The restaurant subgraph for the visualizer (ignores any unrelated nodes in the database). */
+export const GRAPH_LABELS = [
+  "Restaurant", "MenuItem", "Ingredient", "FoodTrend", "LocalCreator",
+  "Competitor", "Complaint", "Strength", "Neighborhood",
+];
+
+export async function getGraphView(driver: Driver, rid = DEFAULT_RESTAURANT_ID) {
+  await ensureHospitalitySeed(driver, rid);
+  const rows = await runCypher(
+    driver,
+    `MATCH (a)-[rel]->(b)
+     WHERE labels(a)[0] IN $labels AND labels(b)[0] IN $labels
+     RETURN labels(a)[0] AS aLabel, properties(a) AS a, type(rel) AS rel,
+            labels(b)[0] AS bLabel, properties(b) AS b
+     LIMIT 400`,
+    { labels: GRAPH_LABELS }
+  );
+  const nodes = new Map<string, { id: string; label: string; type: string; details: Record<string, unknown> }>();
+  const edges: { id: string; source: string; target: string; label: string }[] = [];
+  const add = (label: string, props: any) => {
+    const id = `${label}:${props.id ?? props.name}`;
+    if (!nodes.has(id)) {
+      nodes.set(id, { id, label: props.name ?? props.handle ?? props.theme ?? props.id, type: label, details: props });
+    }
+    return id;
+  };
+  rows.forEach((row: any, i: number) => {
+    const s = add(row.aLabel, row.a);
+    const t = add(row.bLabel, row.b);
+    edges.push({ id: `e${i}`, source: s, target: t, label: row.rel });
+  });
+  return { nodes: Array.from(nodes.values()), edges };
 }
 
 // Convert Neo4j Integers (and nested values) into plain JS numbers.

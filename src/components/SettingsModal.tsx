@@ -1,127 +1,74 @@
 "use client";
 
-import React, { useState } from "react";
-import { Key, X, Shield, ExternalLink, Check } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { X, CheckCircle2, XCircle } from "lucide-react";
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+interface Status {
+  neo4j: { connected: boolean; detail?: string };
+  youCom: { configured: boolean };
+  masko: { configured: boolean };
+  treg: { configured: boolean };
+}
+
+/** Read-only view of which services the server is connected to. Keys stay server-side. */
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
-  const [youApiKey, setYouApiKey] = useState("");
-  const [tregApiKey, setTregApiKey] = useState("");
-  const [neo4jUri, setNeo4jUri] = useState("");
-  const [saved, setSaved] = useState(false);
+  const [status, setStatus] = useState<Status | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setStatus(null);
+    fetch("/api/status")
+      .then((r) => r.json())
+      .then(setStatus)
+      .catch(() => setStatus(null));
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const handleSave = () => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("plateos_you_key", youApiKey);
-      localStorage.setItem("plateos_treg_key", tregApiKey);
-      localStorage.setItem("plateos_neo4j_uri", neo4jUri);
-    }
-    setSaved(true);
-    setTimeout(() => {
-      setSaved(false);
-      onClose();
-    }, 1000);
-  };
+  const rows = status
+    ? [
+        { name: "You.com Search", ok: status.youCom.configured, env: "YOU_API_KEY", use: "Trend proof, city buzz, filming references, fact checks" },
+        { name: "Neo4j AuraDB", ok: status.neo4j.connected, env: "NEO4J_URI / NEO4J_PASSWORD", use: "The restaurant graph behind every tab and Chef Pepper" },
+        { name: "Masko", ok: status.masko.configured, env: "MASKO_API_KEY", use: "Chef Pepper's character and animations" },
+        { name: "Treg", ok: status.treg.configured, env: "TREG_API_KEY", use: "Live creator discovery from geo-tagged posts (coming next)" },
+      ]
+    : [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-md rounded-2xl bg-neutral-950 border border-neutral-800 shadow-2xl p-6 space-y-5">
-        <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
-          <div className="flex items-center space-x-2">
-            <Key className="w-4 h-4 text-indigo-400" />
-            <h3 className="text-sm font-bold text-white">API Keys & Live Environment</h3>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-neutral-400 hover:text-white p-1 rounded-lg bg-neutral-900 border border-neutral-800 text-xs"
-          >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-950 shadow-2xl">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-800">
+          <span className="text-sm font-bold text-white">Connections</span>
+          <button onClick={onClose} className="text-neutral-400 hover:text-white">
             <X className="w-4 h-4" />
           </button>
         </div>
-
-        <p className="text-xs text-neutral-400">
-          BonAppTea includes built-in high-fidelity grounding simulations for hackathon presentation. Add live keys to route directly to third-party endpoints.
-        </p>
-
-        <div className="space-y-3 text-xs">
-          <div>
-            <div className="flex justify-between mb-1">
-              <span className="text-neutral-300 font-medium">You.com API Key:</span>
-              <a
-                href="https://you.com/platform"
-                target="_blank"
-                rel="noreferrer"
-                className="text-[10px] text-indigo-400 hover:underline flex items-center space-x-0.5"
-              >
-                <span>Get Key</span>
-                <ExternalLink className="w-2.5 h-2.5" />
-              </a>
+        <div className="p-5 space-y-3">
+          {!status && <div className="text-xs text-neutral-500 animate-pulse">Checking…</div>}
+          {rows.map((r) => (
+            <div key={r.name} className="flex items-start gap-2.5">
+              {r.ok ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5" />
+              ) : (
+                <XCircle className="w-4 h-4 text-rose-400 mt-0.5" />
+              )}
+              <div>
+                <div className="text-xs font-semibold text-white">
+                  {r.name} <span className="font-mono text-[10px] text-neutral-500">{r.env}</span>
+                </div>
+                <div className="text-[11px] text-neutral-400">{r.use}</div>
+              </div>
             </div>
-            <input
-              type="password"
-              value={youApiKey}
-              onChange={(e) => setYouApiKey(e.target.value)}
-              placeholder="ydc_api_..."
-              className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-white font-mono placeholder-neutral-600 focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-
-          <div>
-            <div className="flex justify-between mb-1">
-              <span className="text-neutral-300 font-medium">Treg Tool Gateway Key:</span>
-              <a
-                href="https://treg.to"
-                target="_blank"
-                rel="noreferrer"
-                className="text-[10px] text-sky-400 hover:underline flex items-center space-x-0.5"
-              >
-                <span>treg.to</span>
-                <ExternalLink className="w-2.5 h-2.5" />
-              </a>
-            </div>
-            <input
-              type="password"
-              value={tregApiKey}
-              onChange={(e) => setTregApiKey(e.target.value)}
-              placeholder="treg_live_..."
-              className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-white font-mono placeholder-neutral-600 focus:outline-none focus:border-sky-500"
-            />
-          </div>
-
-          <div>
-            <div className="flex justify-between mb-1">
-              <span className="text-neutral-300 font-medium">Neo4j AuraDB Connection URI:</span>
-              <span className="text-[10px] text-neutral-500">Optional</span>
-            </div>
-            <input
-              type="text"
-              value={neo4jUri}
-              onChange={(e) => setNeo4jUri(e.target.value)}
-              placeholder="neo4j+s://xxxx.databases.neo4j.io"
-              className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-white font-mono placeholder-neutral-600 focus:outline-none focus:border-purple-500"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between pt-2 border-t border-neutral-800">
-          <span className="text-[10px] text-emerald-400 flex items-center space-x-1">
-            <Shield className="w-3 h-3" />
-            <span>Keys stored locally in browser session</span>
-          </span>
-
-          <button
-            onClick={handleSave}
-            className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition flex items-center space-x-1"
-          >
-            {saved ? <Check className="w-3 h-3 text-emerald-400" /> : null}
-            <span>{saved ? "Saved!" : "Save Keys"}</span>
-          </button>
+          ))}
+          <p className="text-[10px] text-neutral-500 pt-2 border-t border-neutral-800">
+            Keys live in server environment variables (.env.local locally, Vercel project settings in production). They never
+            reach the browser.
+          </p>
         </div>
       </div>
     </div>
