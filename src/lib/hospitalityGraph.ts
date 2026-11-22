@@ -376,15 +376,19 @@ export interface VettedCreator {
   score: number;
 }
 
-/** Rules: 5k–30k followers, ≥70% local, posts in the city, no paid rival post in 60 days, known engagement. */
+/** Nano + micro creators: big enough to be seen, small enough that their audience is real and local. */
+export const MIN_FOLLOWERS = 2000;
+export const MAX_FOLLOWERS = 30000;
+
+/** Rules: 2k–30k followers, ≥70% local, posts in the city, no paid rival post in 60 days, known engagement. */
 export async function getCreatorVetting(driver: Driver, rid = DEFAULT_RESTAURANT_ID): Promise<VettedCreator[]> {
   await ensureHospitalitySeed(driver, rid);
   const rows = await runCypher(driver, CREATOR_VETTING_CYPHER, { rid });
   return rows
     .map((c: any) => {
       const reasons: string[] = [];
-      if (c.followers < 5000) reasons.push("Under 5k followers");
-      if (c.followers > 30000) reasons.push(`${Math.round(c.followers / 1000)}k followers: not a micro-creator`);
+      if (c.followers < MIN_FOLLOWERS) reasons.push(`Under ${MIN_FOLLOWERS / 1000}k followers`);
+      if (c.followers > MAX_FOLLOWERS) reasons.push(`${Math.round(c.followers / 1000)}k followers: not a nano or micro creator`);
       const localLabel = c.localMetric === "posting" ? "of geo-tagged posts are local" : "local audience";
       if (c.localPct === null || c.localPct === undefined) reasons.push("Too few geo-tagged posts to judge local reach");
       else if (c.localPct < 70) reasons.push(`Only ${c.localPct}% ${localLabel}`);
@@ -575,7 +579,7 @@ LIMIT 6`,
   "cuisine-fit": `
 // Creators who already cover what we cook
 MATCH path = (c:LocalCreator)-[:COVERS]->(cu:Cuisine)<-[:SERVES_CUISINE]-(r:Restaurant {id: $rid})
-WHERE 5000 <= c.followers <= 30000
+WHERE $minFollowers <= c.followers <= $maxFollowers
 WITH c, collect(cu.name) AS cuisines, collect(path) AS paths
 RETURN c.handle AS creator, cuisines,
        reduce(ns = [], p IN paths | ns + [n IN nodes(p) | elementId(n)]) AS nodeIds,
@@ -586,7 +590,8 @@ LIMIT 3`,
 
 export async function getInsights(driver: Driver, rid = DEFAULT_RESTAURANT_ID): Promise<Insight[]> {
   await ensureHospitalitySeed(driver, rid);
-  const run = (kind: Insight["kind"]) => runCypher(driver, INSIGHT_CYPHER[kind], { rid });
+  const run = (kind: Insight["kind"]) =>
+    runCypher(driver, INSIGHT_CYPHER[kind], { rid, minFollowers: MIN_FOLLOWERS, maxFollowers: MAX_FOLLOWERS });
   const [conquest, warm, pantry, gaps, open, fit] = await Promise.all([
     run("conquest"), run("warm-lead"), run("pantry-trend"), run("rival-gap"), run("open-trend"), run("cuisine-fit"),
   ]);
@@ -695,8 +700,11 @@ function speakCreators(vetted: VettedCreator[]): { speech: string; mood: Mood } 
   const live = passed.filter((c) => c.source === "treg").map((c) => c.handle);
   const warm = passed.filter((c) => c.alreadyPostedAboutUs).map((c) => c.handle);
   let s = `I checked ${vetted.length} creators and only ${passed.length} are worth a comped table. Top picks: ${list}.`;
-  if (warm.length) s += ` ${warm.join(", ")} already posted about you, so start there.`;
-  if (live.length) s += ` ${live.join(", ")} ${live.length === 1 ? "was" : "were"} found live on Instagram through Treg.`;
+  const everyone = (xs: string[]) => xs.length === passed.length && passed.length > 1;
+  if (everyone(warm)) s += " Every one of them already posted from your restaurant, so these are warm invites.";
+  else if (warm.length) s += ` ${warm.join(", ")} already posted about you, so start there.`;
+  if (everyone(live)) s += " All were found live on Instagram through Treg.";
+  else if (live.length) s += ` ${live.join(", ")} ${live.length === 1 ? "was" : "were"} found live on Instagram through Treg.`;
   return { speech: s + ` Want me to draft ${top[0].handle}'s invite?`, mood: "excited" };
 }
 

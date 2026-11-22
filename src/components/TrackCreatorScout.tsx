@@ -129,7 +129,7 @@ export const TrackCreatorScout: React.FC = () => {
       <TrackHeader
         icon={<Users className="w-5 h-5 text-emerald-400" />}
         title="Creator Scout: Stop Comping Freeloaders"
-        subtitle="Every creator is vetted in the graph: micro-sized, mostly local, near you, and not working for a rival."
+        subtitle="Every creator is vetted in the graph: 2k–30k followers, mostly local, near you, and not working for a rival."
         right={
           data && (
             <span className="text-[11px] font-mono text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full">
@@ -196,7 +196,7 @@ export const TrackCreatorScout: React.FC = () => {
             </div>
             {passed.length === 0 && (
               <div className="text-xs text-neutral-400 p-3 rounded-xl border border-neutral-800 bg-neutral-900/40">
-                No creator passes the micro-creator rules yet (5k–30k followers, at least 70% local). Real posters are often smaller or
+                No creator passes the rules yet (2k–30k followers, at least 70% local). Real posters are often smaller or
                 bigger. You can still pick anyone below, such as a warm lead who already posted from you, to draft an invite.
               </div>
             )}

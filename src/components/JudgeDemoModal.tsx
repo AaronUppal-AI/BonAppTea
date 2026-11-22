@@ -36,7 +36,7 @@ const STEPS: { time: string; track: TrackType; title: string; say: string; show:
     time: "2:00 – 3:00",
     track: "chef-pepper",
     title: "Chef Pepper + Creator Scout: grounded answers",
-    say: "Real posters are messy: most are under 5k followers or over 30k, so none passes the micro-creator rules, and we say so. The warm leads who just ate at Kochi are the obvious first invites.",
+    say: "Real posters are messy: lots of tiny accounts, mega-accounts and restaurants posing as creators. The graph keeps nano and micro creators (2k–30k) who mostly post in NYC, and flags warm leads who just ate at Kochi.",
     show: "Ask Chef Pepper about rivals and creators, open the Neo4j query behind an answer, then draft a thank-you invite in Creator Scout.",
   },
 ];
