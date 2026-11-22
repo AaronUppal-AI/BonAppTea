@@ -5,7 +5,8 @@ import { getRestaurant, ensureHospitalitySeed, DEFAULT_RESTAURANT_ID } from "./h
 /**
  * Live creator discovery through Treg, written into the Neo4j graph.
  *
- * 1. Search the neighborhood's food hashtags for recent Instagram posts.
+ * 1. Collect recent Instagram posts tagged at the restaurant's own location (warm leads), plus the
+ *    restaurant's hashtag and the neighborhood's food hashtags.
  * 2. Look up each poster's profile; drop restaurants and other business accounts.
  * 3. Read each creator's recent posts for followers, engagement and where they post.
  * 4. MERGE them into Neo4j as LocalCreator nodes, so Creator Scout and Chef Pepper vet them
@@ -22,7 +23,23 @@ const TOOLS = {
 };
 
 export const SCAN_COOLDOWN_MS = 6 * 60 * 60 * 1000;
-const MAX_CANDIDATES = 6;
+const MAX_CANDIDATES = 8;
+const LOCATION_POSTS = "tikhub.x.instagram-v1-fetch-location-posts";
+// Cuisines a creator covers, inferred from their captions
+const CUISINE_PATTERNS: Record<string, RegExp> = {
+  Korean: /korean|k-?food|kbbq|bibimbap|kimchi|bulgogi|soju|tteok|banchan|gochujang/i,
+  Desserts: /dessert|ice cream|gelato|pastry|pastries|cake|bakery|cookie/i,
+  Japanese: /japanese|sushi|omakase|ramen|izakaya|yakitori/i,
+  Italian: /italian|pasta|pizza|trattoria/i,
+};
+const norm = (s: string) => s.toLowerCase().replace(/[’'`]/g, "");
+// Instagram location tags often carry coordinates but no city text; within this radius counts as local.
+const LOCAL_RADIUS_KM = 25;
+function kmBetween(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const a = Math.sin(toRad(lat2 - lat1) / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(toRad(lng2 - lng1) / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(a));
+}
 const BUSINESS_CATEGORY = /restaurant|caf[eé]|coffee|bakery|\bbar\b|pub|pizza|food & beverage|grocery|shopping|retail|hotel|deli|brewery|winery|catering|local business|dessert shop/i;
 const CITY_PATTERN = /new york|manhattan|brooklyn|queens|bronx|staten island|\bnyc\b/i;
 // Restaurants often leave the Instagram category blank; their bios give them away.
@@ -40,6 +57,9 @@ export interface DiscoveredCreator {
   audienceHood: string;
   category: string | null;
   samplePostUrl: string | null;
+  covers: string[];
+  /** Found through a post tagged at the restaurant */
+  postedFromUs: boolean;
 }
 
 export interface ScanResult {
@@ -74,7 +94,7 @@ export async function discoverCreators(driver: Driver, opts: { rid?: string; for
   const restaurant = await getRestaurant(driver, rid);
   const slug = restaurant.neighborhood.toLowerCase().replace(/[^a-z]/g, "");
   const citySlug = restaurant.city === "New York" ? "nyc" : restaurant.city.toLowerCase().replace(/[^a-z]/g, "");
-  const hashtags = [`${slug}food`, `${slug}eats`, `${citySlug}foodie`];
+  const hashtags = [`${slug}food`, `${slug}eats`, restaurant.instagram ? restaurant.instagram : `${citySlug}foodie`];
 
   const last = await getLastScan(driver, rid);
   if (!opts.force && last.at && Date.now() - new Date(last.at).getTime() < SCAN_COOLDOWN_MS) {
@@ -106,23 +126,38 @@ export async function discoverCreators(driver: Driver, opts: { rid?: string; for
     } else failures.push(`#${hashtags[i]}: ${r.reason?.message ?? r.reason}`);
   });
 
-  // Rank posters by how often they show up, then by likes.
-  const byUser = new Map<string, { count: number; likes: number; url: string | null }>();
-  for (const p of posts) {
-    const username: string | undefined = p?.owner?.username;
-    if (!username) continue;
-    const prev = byUser.get(username) ?? { count: 0, likes: 0, url: null };
-    byUser.set(username, {
-      count: prev.count + 1,
-      likes: prev.likes + (Number(p.like_count) || 0),
-      url: prev.url ?? p.url ?? (p.shortcode ? `https://www.instagram.com/p/${p.shortcode}/` : null),
+  // Posts tagged at the restaurant itself: these people already came in.
+  const warmPosts: any[] = [];
+  if (restaurant.instagramLocationId) {
+    const locResults = await Promise.allSettled(
+      ["recent", "ranked"].map((tab) => tregCall(LOCATION_POSTS, { location_id: restaurant.instagramLocationId!, tab }))
+    );
+    locResults.forEach((r, i) => {
+      if (r.status === "fulfilled") {
+        costMicro += r.value.costMicro;
+        for (const e of r.value.data?.data?.edges ?? []) warmPosts.push(e.node ?? e);
+      } else failures.push(`location posts (${i === 0 ? "recent" : "top"}): ${r.reason?.message ?? r.reason}`);
     });
+  }
+
+  // Rank posters: people who posted from the restaurant first, then by how often they show up, then likes.
+  const byUser = new Map<string, { count: number; likes: number; url: string | null; warmPost: any | null }>();
+  const bump = (username: string | undefined, likes: number, url: string | null, warmPost: any | null) => {
+    if (!username || username.toLowerCase() === (restaurant.instagram ?? "").toLowerCase()) return;
+    const prev = byUser.get(username) ?? { count: 0, likes: 0, url: null, warmPost: null };
+    byUser.set(username, { count: prev.count + 1, likes: prev.likes + likes, url: prev.url ?? url, warmPost: prev.warmPost ?? warmPost });
+  };
+  for (const p of posts) {
+    bump(p?.owner?.username, Number(p.like_count) || 0, p.url ?? (p.shortcode ? `https://www.instagram.com/p/${p.shortcode}/` : null), null);
+  }
+  for (const p of warmPosts) {
+    bump(p?.user?.username, Number(p.like_count) || 0, p.code ? `https://www.instagram.com/p/${p.code}/` : null, p);
   }
   // Spend lookups on new accounts: skip anyone scanned (or flagged as a business) in the last week.
   const recentlySeen = await listRecentlyScanned(driver);
   const candidates = Array.from(byUser.entries())
     .filter(([username]) => !recentlySeen.has(username.toLowerCase()))
-    .sort((a, b) => b[1].count - a[1].count || b[1].likes - a[1].likes)
+    .sort((a, b) => Number(!!b[1].warmPost) - Number(!!a[1].warmPost) || b[1].count - a[1].count || b[1].likes - a[1].likes)
     .slice(0, MAX_CANDIDATES);
 
   const knownHoods = await listNeighborhoods(driver);
@@ -165,8 +200,13 @@ export async function discoverCreators(driver: Driver, opts: { rid?: string; for
 
         const located = items.map((it) => it.location).filter((l) => l && typeof l === "object");
         const isLocal = (l: any) => {
+          const lat = Number(l.lat ?? l.latitude);
+          const lng = Number(l.lng ?? l.longitude);
+          if (restaurant.lat !== undefined && restaurant.lng !== undefined && Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)) {
+            return kmBetween(restaurant.lat, restaurant.lng, lat, lng) <= LOCAL_RADIUS_KM;
+          }
           const text = `${l.city ?? ""} ${l.name ?? ""}`;
-          return CITY_PATTERN.test(text) || knownHoods.some((h) => text.toLowerCase().includes(h.toLowerCase()));
+          return CITY_PATTERN.test(text) || knownHoods.some((h) => norm(text).includes(norm(h)));
         };
         const inCity = located.filter(isLocal).length;
         const localPct = located.length >= 3 ? Math.round((inCity / located.length) * 100) : null;
@@ -174,22 +214,20 @@ export async function discoverCreators(driver: Driver, opts: { rid?: string; for
         // Neighborhood they post from most, among the graph's known neighborhoods.
         const hoodCounts = new Map<string, number>();
         for (const l of located) {
-          const text = `${l.city ?? ""} ${l.name ?? ""}`.toLowerCase();
-          for (const hood of knownHoods) if (text.includes(hood.toLowerCase())) hoodCounts.set(hood, (hoodCounts.get(hood) ?? 0) + 1);
+          const text = norm(`${l.city ?? ""} ${l.name ?? ""}`);
+          for (const hood of knownHoods) if (text.includes(norm(hood))) hoodCounts.set(hood, (hoodCounts.get(hood) ?? 0) + 1);
         }
         const topHood = Array.from(hoodCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0];
         const audienceHood = topHood ?? (inCity > 0 ? `Elsewhere in ${restaurant.city}` : "Outside the city");
 
         // Every post becomes a node; tagged locations become Places linked into the neighborhood graph.
-        postsByCreator.set(
-          `ig-${username}`,
-          items.slice(0, 12).map((it): PostRow => {
+        const toRow = (it: any): PostRow => {
             const code = it.code ?? it.shortcode ?? String(it.pk ?? it.id);
             const caption = typeof it.caption === "string" ? it.caption : it.caption?.text ?? "";
             const loc = it.location && typeof it.location === "object" ? it.location : null;
             const locText = loc ? `${loc.city ?? ""} ${loc.name ?? ""}` : "";
-            const hood = loc ? knownHoods.find((h) => locText.toLowerCase().includes(h.toLowerCase())) ?? null : null;
-            const venueId = loc ? knownVenues.get(String(loc.name ?? "").toLowerCase()) ?? null : null;
+            const hood = loc ? knownHoods.find((h) => norm(locText).includes(norm(h))) ?? null : null;
+            const venueId = loc ? matchVenue(knownVenues, loc) : null;
             return {
               id: `ig-post-${code}`,
               takenAt: typeof it.taken_at === "number" ? it.taken_at : null,
@@ -200,13 +238,32 @@ export async function discoverCreators(driver: Driver, opts: { rid?: string; for
               url: `https://www.instagram.com/p/${code}/`,
               venueId,
               place: loc && !venueId
-                ? { id: `ig-loc-${loc.pk ?? loc.facebook_places_id ?? loc.name}`, name: String(loc.name ?? "Unknown place"), city: loc.city ?? null, hood, inCity: hood !== null || CITY_PATTERN.test(locText) }
+                ? { id: `ig-loc-${loc.pk ?? loc.facebook_places_id ?? loc.name}`, name: String(loc.name ?? "Unknown place"), city: loc.city ?? null, hood, inCity: hood !== null || isLocal(loc) }
                 : null,
             };
-          })
-        );
+        };
+        const rows = items.slice(0, 12).map(toRow);
+        // The post that brought them in from the restaurant's location tag is always linked to the restaurant.
+        if (seen.warmPost) {
+          const warm = toRow(seen.warmPost);
+          warm.venueId = restaurant.id;
+          warm.place = null;
+          const i = rows.findIndex((r) => r.id === warm.id);
+          if (i >= 0) rows[i] = { ...rows[i], venueId: restaurant.id, place: null };
+          else rows.push(warm);
+        }
+        postsByCreator.set(`ig-${username}`, rows);
+
+        const captions = [...items, ...(seen.warmPost ? [seen.warmPost] : [])]
+          .map((it) => (typeof it.caption === "string" ? it.caption : it.caption?.text ?? ""))
+          .join(" ");
+        const covers = Object.entries(CUISINE_PATTERNS)
+          .filter(([, re]) => re.test(captions))
+          .map(([cuisine]) => cuisine);
 
         added.push({
+          covers,
+          postedFromUs: Boolean(seen.warmPost),
           handle: `@${username}`,
           followers,
           engagement,
@@ -260,6 +317,13 @@ export async function discoverCreators(driver: Driver, opts: { rid?: string; for
                post.caption = p.caption, post.url = p.url, post.source = 'treg'
            MERGE (c)-[:POSTED]->(post)`,
           { id, ...c, posts }
+        );
+        await tx.run(
+          `MATCH (c:LocalCreator {id: $id})
+           UNWIND $covers AS cu
+           MATCH (k:Cuisine {name: cu})
+           MERGE (c)-[:COVERS]->(k)`,
+          { id, covers: c.covers }
         );
         // Posts tagged at a venue already in the graph (a rival, or us)
         await tx.run(
@@ -345,13 +409,32 @@ async function listNeighborhoods(driver: Driver): Promise<string[]> {
   }
 }
 
-/** Restaurant and rival names → node id, so a tagged post links to the venue already in the graph. */
-async function listVenues(driver: Driver): Promise<Map<string, string>> {
+interface Venue {
+  id: string;
+  name: string;
+  igLocationId: string | null;
+}
+
+/** The restaurant and its rivals, so a tagged post links to the venue already in the graph. */
+async function listVenues(driver: Driver): Promise<Venue[]> {
   const session = driver.session();
   try {
-    const res = await session.run(`MATCH (v) WHERE v:Restaurant OR v:Competitor RETURN toLower(v.name) AS name, v.id AS id`);
-    return new Map(res.records.map((r) => [r.get("name") as string, r.get("id") as string]));
+    const res = await session.run(
+      `MATCH (v) WHERE v:Restaurant OR v:Competitor RETURN v.id AS id, v.name AS name, v.instagram_location_id AS igLocationId`
+    );
+    return res.records.map((r) => ({ id: r.get("id"), name: norm(String(r.get("name"))), igLocationId: r.get("igLocationId") ?? null }));
   } finally {
     await session.close();
   }
+}
+
+/** Match an Instagram location to a venue by location id, or by name ("Kochi NYC" → Kochi, "Danji" → Danji). */
+function matchVenue(venues: Venue[], loc: any): string | null {
+  const pk = String(loc.pk ?? loc.id ?? "");
+  const byId = venues.find((v) => v.igLocationId && v.igLocationId === pk);
+  if (byId) return byId.id;
+  const name = norm(String(loc.name ?? ""));
+  if (!name) return null;
+  const byName = venues.find((v) => name === v.name || name.startsWith(`${v.name} `) || v.name.startsWith(`${name} `));
+  return byName?.id ?? null;
 }

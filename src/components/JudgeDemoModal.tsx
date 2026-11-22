@@ -12,32 +12,32 @@ interface JudgeDemoModalProps {
 
 const STEPS: { time: string; track: TrackType; title: string; say: string; show: string }[] = [
   {
-    time: "0:00 – 0:45",
+    time: "0:00 – 0:40",
+    track: "knowledge-graph",
+    title: "Knowledge Graph: Kochi's real neighborhood, live",
+    say: "This is Kochi, a one-Michelin-star Korean restaurant in Hell's Kitchen. Its menu comes from its website; rivals, their Google reviews and the creators who posted from Kochi were pulled live through Treg into Neo4j.",
+    show: "Click a warm lead to light up creator → post → Kochi, then Danji's portion complaint → theme → Kochi's eight-course tasting.",
+  },
+  {
+    time: "0:40 – 1:20",
     track: "trend-radar",
     title: "Trend Radar: catch it before it peaks",
-    say: "Osteria Pepe already stocks mascarpone, espresso and ladyfingers. The graph says Tableside Tiramisu is accelerating, so they can add it this weekend with zero new inventory.",
-    show: "Click Tableside Tiramisu. Point at the pantry match, then the You.com web-proof links showing the trend is real and current.",
+    say: "Black sesame desserts are rising, and Kochi already stocks everything for them; its Black Sesame course is the vehicle. No new inventory needed.",
+    show: "Click Black Sesame Desserts: pantry match, no tracked rival on it, then the You.com web proof (stored in the graph).",
   },
   {
-    time: "0:45 – 1:30",
+    time: "1:20 – 2:00",
     track: "dish-to-post",
     title: "Dish-to-Post: a shot list the chef can film in 10 seconds",
-    say: "Chefs are not videographers. BonAppTea pairs the dish with the trend's hook and hands them three clips, a caption, hashtags and the audio to use.",
-    show: "Show the Tiramisu shot list, copy the caption, then scroll to the You.com filming references.",
+    say: "Chefs aren't videographers. BonAppTea pairs the Tuna Bibimbap with the tableside-mix trend and hands over three clips, a caption, hashtags and audio.",
+    show: "Show the shot list, copy the caption, then the You.com filming references.",
   },
   {
-    time: "1:30 – 2:15",
-    track: "creator-scout",
-    title: "Creator Scout: stop comping freeloaders",
-    say: "Six creators, three worth a table. The graph drops the 240k account with 11% local reach and the one who promoted a rival 20 days ago.",
-    show: "Point at the filtered-out reasons, then copy the VIP invite for the slow Tuesday dinner.",
-  },
-  {
-    time: "2:15 – 3:00",
-    track: "intel-desk",
-    title: "Intel Desk + Chef Pepper: exploit rival weak spots",
-    say: "Lucky Slice is getting roasted for wait times; we have walk-in tables at 5 PM. And before posting 'San Marzano DOP', we check it against live sources.",
-    show: "Run a fact-check example, then ask Chef Pepper how to fill slow Tuesday nights and expand the Neo4j query behind his answer.",
+    time: "2:00 – 3:00",
+    track: "chef-pepper",
+    title: "Chef Pepper + Creator Scout: grounded answers",
+    say: "Real posters are messy: most are under 5k followers or over 30k, so none passes the micro-creator rules, and we say so. The warm leads who just ate at Kochi are the obvious first invites.",
+    show: "Ask Chef Pepper about rivals and creators, open the Neo4j query behind an answer, then draft a thank-you invite in Creator Scout.",
   },
 ];
 

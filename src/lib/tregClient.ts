@@ -19,15 +19,26 @@ export function isTregConfigured(): boolean {
   return Boolean(process.env.TREG_API_KEY);
 }
 
-export async function tregCall<T = any>(toolId: string, query: Record<string, string>, timeoutMs = 45000): Promise<TregResult<T>> {
+export async function tregCall<T = any>(
+  toolId: string,
+  query: Record<string, string>,
+  opts: { body?: unknown; timeoutMs?: number; maxCostUsd?: number } = {}
+): Promise<TregResult<T>> {
   const token = process.env.TREG_API_KEY;
   if (!token) throw new TregError("TREG_API_KEY is not set", 0, true);
 
-  const url = `https://treg.to/call/${encodeURIComponent(toolId)}?${new URLSearchParams(query)}`;
+  const qs = new URLSearchParams(query).toString();
+  const url = `https://treg.to/call/${encodeURIComponent(toolId)}${qs ? `?${qs}` : ""}`;
+  const headers: Record<string, string> = { "X-Treg-Token": token };
+  if (opts.body !== undefined) headers["Content-Type"] = "application/json";
+  // Routed tools fall through providers; cap what a single call may spend.
+  if (opts.maxCostUsd !== undefined) headers["X-Treg-Route-Max-Cost"] = String(opts.maxCostUsd);
   const res = await fetch(url, {
-    headers: { "X-Treg-Token": token },
+    method: opts.body !== undefined ? "POST" : "GET",
+    headers,
+    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     cache: "no-store",
-    signal: AbortSignal.timeout(timeoutMs),
+    signal: AbortSignal.timeout(opts.timeoutMs ?? 45000),
   });
   const costMicro = Number(res.headers.get("x-treg-cost-micro") ?? 0) || 0;
   const callId = res.headers.get("x-treg-call-id");

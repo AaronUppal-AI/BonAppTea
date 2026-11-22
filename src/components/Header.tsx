@@ -9,6 +9,7 @@ interface HeaderProps {
   setActiveTrack: (track: TrackType) => void;
   onOpenJudgeDemo: () => void;
   onOpenSettings: () => void;
+  onOpenAbout: (section: "about" | "pricing") => void;
   isJudgeDemoActive?: boolean;
 }
 
@@ -45,7 +46,7 @@ const Badge: React.FC<{ ok: boolean | undefined; label: string }> = ({ ok, label
   </div>
 );
 
-export const Header: React.FC<HeaderProps> = ({ activeTrack, setActiveTrack, onOpenJudgeDemo, onOpenSettings, isJudgeDemoActive }) => {
+export const Header: React.FC<HeaderProps> = ({ activeTrack, setActiveTrack, onOpenJudgeDemo, onOpenSettings, onOpenAbout, isJudgeDemoActive }) => {
   const [status, setStatus] = useState<Status | null>(null);
 
   useEffect(() => {
@@ -82,6 +83,12 @@ export const Header: React.FC<HeaderProps> = ({ activeTrack, setActiveTrack, onO
           </div>
 
           <div className="flex items-center gap-2.5">
+            <button onClick={() => onOpenAbout("about")} className="text-xs font-medium text-neutral-300 hover:text-white px-1.5">
+              About
+            </button>
+            <button onClick={() => onOpenAbout("pricing")} className="text-xs font-medium text-neutral-300 hover:text-white px-1.5">
+              Pricing
+            </button>
             <button
               onClick={onOpenJudgeDemo}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${

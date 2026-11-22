@@ -71,11 +71,14 @@ const proximityText: Record<VettedCreator["proximity"], string> = {
   outside: "outside your area",
 };
 
-const k = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
+const k = (n: number) => (n >= 10000 ? `${Math.round(n / 1000)}k` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
 function inviteText(c: VettedCreator, r: RestaurantProfile, dish: string | null, shift: string) {
   const name = c.handle.replace(/^@/, "");
-  return `Hey ${name}! We're ${r.name}, ${/^[aeiou]/i.test(r.cuisine) ? "an" : "a"} ${r.cuisine} spot in the ${r.neighborhood}. Your ${c.audienceHood} followers are exactly the neighbors we cook for. We'd love to host you and a guest for a comped tasting${dish ? ` of our ${dish}` : ""} on ${shift}. No posting required; if you love it, we'd be thrilled if you shared it. Which night works?`;
+  const intro = c.alreadyPostedAboutUs
+    ? `Hey ${name}! This is the team at ${r.name}. We saw your post from your dinner with us and loved it, thank you.`
+    : `Hey ${name}! We're ${r.name}, ${/^[aeiou]/i.test(r.cuisine) ? "an" : "a"} ${r.cuisine} restaurant in ${r.neighborhood}${r.award ? ` (${r.award})` : ""}. Your food posts around ${r.city} caught our eye.`;
+  return `${intro} We'd love to host you and a guest for a comped tasting${dish ? ` featuring our ${dish}` : ""} on ${shift}. No posting required; if you love it, we'd be thrilled if you shared it. Which night works?`;
 }
 
 export const TrackCreatorScout: React.FC = () => {
@@ -92,7 +95,7 @@ export const TrackCreatorScout: React.FC = () => {
     getJson<CreatorsData>("/api/creators")
       .then((d) => {
         setData(d);
-        if (!keepSelection) setSelected(d.creators.find((c) => c.passed) ?? null);
+        if (!keepSelection) setSelected(d.creators.find((c) => c.passed) ?? d.creators.find((c) => c.alreadyPostedAboutUs) ?? null);
         setShift((s) => s || d.restaurant.slowShifts[0] || "a weeknight");
       })
       .catch((e) => setError(e.message));
@@ -146,8 +149,10 @@ export const TrackCreatorScout: React.FC = () => {
               <Radar className="w-4 h-4 text-fuchsia-400" /> Live discovery from Instagram, via Treg
             </div>
             <p className="text-neutral-400 mt-0.5">
-              Scans {data.restaurant.neighborhood} food hashtags, drops restaurant accounts, measures each creator&apos;s followers,
-              engagement and where they post, then writes them into the Neo4j graph for vetting. About 2¢ per scan.
+              Finds people who posted from {data.restaurant.name}&apos;s Instagram location tag
+              {data.restaurant.instagram ? ` or #${data.restaurant.instagram}` : ""}, plus {data.restaurant.neighborhood} food hashtags.
+              Drops restaurant accounts, measures each creator&apos;s followers, engagement and where they post, then writes them into the
+              Neo4j graph for vetting. About 3¢ per scan.
             </p>
             {data.scan.lastScanAt && (
               <p className="text-[11px] text-neutral-500 mt-1">
@@ -189,7 +194,12 @@ export const TrackCreatorScout: React.FC = () => {
               <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Passed vetting</span>
               <CypherTrace cypher={data.cypher} rows={data.creators.length} />
             </div>
-            {passed.length === 0 && <div className="text-xs text-neutral-500">No creator passes yet.</div>}
+            {passed.length === 0 && (
+              <div className="text-xs text-neutral-400 p-3 rounded-xl border border-neutral-800 bg-neutral-900/40">
+                No creator passes the micro-creator rules yet (5k–30k followers, at least 70% local). Real posters are often smaller or
+                bigger. You can still pick anyone below, such as a warm lead who already posted from you, to draft an invite.
+              </div>
+            )}
             {passed.map((c) => (
               <button
                 key={c.handle}
@@ -239,10 +249,21 @@ export const TrackCreatorScout: React.FC = () => {
 
             <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block pt-2">Filtered out</span>
             {rejected.map((c) => (
-              <div key={c.handle} className="p-3 rounded-xl border border-neutral-800/70 bg-neutral-950/40">
+              <div
+                key={c.handle}
+                onClick={() => setSelected(c)}
+                className={`p-3 rounded-xl border cursor-pointer transition ${
+                  selected?.handle === c.handle ? "border-neutral-500 bg-neutral-900/70" : "border-neutral-800/70 bg-neutral-950/40 hover:border-neutral-700"
+                }`}
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-neutral-400 flex items-center gap-1.5">
                     <XCircle className="w-4 h-4 text-rose-400/80" /> <Handle c={c} />
+                    {c.alreadyPostedAboutUs && (
+                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                        Posted from you
+                      </span>
+                    )}
                     {c.source === "treg" && <LiveBadge />}
                   </span>
                   <span className="text-[11px] text-neutral-500">

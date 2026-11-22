@@ -114,8 +114,15 @@ export function trendEvidence(trend: string) {
 }
 
 /** Recent restaurant coverage for a neighborhood (openings, closings, reviews, complaints). */
-export function neighborhoodBuzz(neighborhood: string, city: string) {
-  return youSearch(`${neighborhood} ${city} restaurant news`, { freshness: "month", count: 6 });
+export async function neighborhoodBuzz(neighborhood: string, city: string) {
+  const res = await youSearch(`${neighborhood} ${city} restaurant openings reviews`, { freshness: "month", count: 10 });
+  // Keep food coverage; drop encyclopedia pages and same-name TV shows (e.g. "Hell's Kitchen").
+  const FOOD = /restaurant|dining|food|eat|menu|chef|bar\b|opening|open(s|ed)?\b|brunch|dinner/i;
+  const OFF_TOPIC = /wikipedia|ramsay|recap|episode|season \d|contestant/i;
+  const sources = res.sources
+    .filter((s) => FOOD.test(`${s.title} ${s.snippet}`) && !OFF_TOPIC.test(`${s.title} ${s.snippet} ${s.domain}`))
+    .slice(0, 6);
+  return { ...res, sources };
 }
 
 /** Video references for filming a dish in a trending format. */

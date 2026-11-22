@@ -60,6 +60,9 @@ export const TrackTrendRadar: React.FC<{ onPlanPost?: (trend: string) => void }>
               <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Trend lifecycle board</span>
               <CypherTrace cypher={data.cypher} rows={data.trends.length} />
             </div>
+            <p className="text-[10px] text-neutral-500">
+              Stage, velocity and weekly upside are illustrative demo values. The pantry match and the You.com web proof are live.
+            </p>
             {data.trends.map((t) => {
               const isSelected = selected?.id === t.id;
               const ready = t.missing.length === 0;

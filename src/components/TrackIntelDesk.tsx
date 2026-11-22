@@ -13,9 +13,9 @@ interface IntelData {
 }
 
 const EXAMPLE_CLAIMS = [
-  "San Marzano tomatoes must be grown near Mount Vesuvius to be DOP certified",
-  "Traditional cacio e pepe has only three ingredients",
-  "Guanciale is made from pork cheek",
+  "Perilla leaves and shiso come from the same plant",
+  "Maesil is a Korean green plum used for syrup",
+  "Bibimbap is a signature dish of Jeonju, Korea",
 ];
 
 export const TrackIntelDesk: React.FC = () => {
@@ -70,11 +70,13 @@ export const TrackIntelDesk: React.FC = () => {
           <div className="lg:col-span-6 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
-                Rival complaints in {data.restaurant.neighborhood} · last 7 days
+                Rival complaints near you · from their recent Google reviews
               </span>
               <CypherTrace cypher={data.cypher} rows={data.rivals.length} />
             </div>
-            {data.rivals.length === 0 && <div className="text-xs text-neutral-500">No complaints about nearby rivals.</div>}
+            {data.rivals.length === 0 && (
+              <div className="text-xs text-neutral-500">No complaints found in nearby rivals&apos; recent Google reviews.</div>
+            )}
             {data.rivals.map((r) => (
               <div
                 key={`${r.competitor}-${r.theme}`}
@@ -82,13 +84,29 @@ export const TrackIntelDesk: React.FC = () => {
               >
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-white">
-                    {r.competitor} <span className="text-[11px] text-neutral-500 font-normal">· {r.cuisine}</span>
+                    {r.googleUrl ? (
+                      <a href={r.googleUrl} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                        {r.competitor}
+                      </a>
+                    ) : (
+                      r.competitor
+                    )}{" "}
+                    <span className="text-[11px] text-neutral-500 font-normal">
+                      · {r.cuisine}
+                      {r.rating !== null && ` · ${r.rating}★ (${r.reviewCount?.toLocaleString()} reviews)`}
+                    </span>
                   </span>
                   <span className="text-[11px] font-mono text-rose-300">
-                    {r.mentions}× {r.theme}
+                    {r.mentions} of {r.reviewsChecked} recent reviews · {r.theme}
                   </span>
                 </div>
-                <p className="text-xs text-neutral-400 italic mt-1">&ldquo;{r.sample}&rdquo;</p>
+                <p className="text-xs text-neutral-400 italic mt-1">
+                  &ldquo;{r.sample}&rdquo;
+                  <span className="not-italic text-neutral-500">
+                    {" "}
+                    · {r.sampleRating}★ Google review{r.sampleDate ? `, ${new Date(r.sampleDate).toLocaleDateString("en-US", { month: "short", year: "numeric" })}` : ""}
+                  </span>
+                </p>
                 {r.ourAnswer ? (
                   <p className="text-xs text-sky-200 mt-2 flex items-start gap-1.5">
                     <Target className="w-3.5 h-3.5 mt-0.5 shrink-0 text-sky-400" />

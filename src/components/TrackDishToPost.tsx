@@ -109,7 +109,7 @@ export const TrackDishToPost: React.FC<{ focusTrend?: string | null }> = ({ focu
               >
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-white">{p.dish}</span>
-                  <span className="text-[10px] font-mono text-neutral-400">{Math.round(p.margin * 100)}% margin</span>
+                  <span className="text-[10px] font-mono text-neutral-400">{p.margin !== null ? `${Math.round(p.margin * 100)}% margin` : "tasting course"}</span>
                 </div>
                 <div className="text-[11px] mt-1">
                   {p.best ? (

@@ -12,6 +12,7 @@ import { GraphExplorer } from "@/components/GraphExplorer";
 import { MaskoAvatarWidget } from "@/components/MaskoAvatarWidget";
 import { JudgeDemoModal } from "@/components/JudgeDemoModal";
 import { SettingsModal } from "@/components/SettingsModal";
+import { AboutModal, AboutSection } from "@/components/AboutModal";
 import { TrackType } from "@/types";
 
 // Which slice of the graph to show under each tab.
@@ -28,6 +29,7 @@ export default function Home() {
   const [focusTrend, setFocusTrend] = useState<string | null>(null);
   const [isJudgeDemoOpen, setIsJudgeDemoOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [about, setAbout] = useState<AboutSection | null>(null);
 
   // Tabs are linkable: bonapptea.vercel.app/#knowledge-graph
   const [hashRead, setHashRead] = useState(false);
@@ -35,6 +37,7 @@ export default function Home() {
     const fromHash = window.location.hash.slice(1) as TrackType;
     const valid: TrackType[] = ["chef-pepper", "knowledge-graph", "trend-radar", "dish-to-post", "creator-scout", "intel-desk"];
     if (valid.includes(fromHash)) setActiveTrack(fromHash);
+    if ((fromHash as string) === "about" || (fromHash as string) === "pricing") setAbout(fromHash as unknown as AboutSection);
     setHashRead(true);
   }, []);
   useEffect(() => {
@@ -51,6 +54,7 @@ export default function Home() {
         setActiveTrack={setActiveTrack}
         onOpenJudgeDemo={() => setIsJudgeDemoOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenAbout={setAbout}
         isJudgeDemoActive={isJudgeDemoOpen}
       />
 
@@ -99,6 +103,7 @@ export default function Home() {
         onNavigateTrack={(track) => setActiveTrack(track)}
       />
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <AboutModal isOpen={about !== null} section={about ?? "about"} onClose={() => setAbout(null)} />
     </div>
   );
 }

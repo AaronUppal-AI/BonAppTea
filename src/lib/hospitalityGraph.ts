@@ -1,4 +1,5 @@
 import neo4j, { Driver } from "neo4j-driver";
+import { KOCHI } from "./restaurants/kochi";
 
 /**
  * BonAppTea hospitality knowledge graph (schema v3).
@@ -17,8 +18,8 @@ import neo4j, { Driver } from "neo4j-driver";
  * creators and creators discovered live through Treg are vetted by the same graph logic.
  */
 
-export const DEFAULT_RESTAURANT_ID = "rest-osteria-pepe";
-const SEED_VERSION = 3;
+export const DEFAULT_RESTAURANT_ID = KOCHI.restaurant.id;
+const SEED_VERSION = 4;
 
 export const HOSPITALITY_LABELS = [
   "City", "Neighborhood", "Place", "Restaurant", "Competitor", "MenuItem", "Ingredient", "FoodTrend",
@@ -26,121 +27,22 @@ export const HOSPITALITY_LABELS = [
 ];
 
 // ---------------------------------------------------------------------------
-// Seed data: one demo East Village restaurant and its neighborhood graph
+// Seed: the restaurant's own facts. Rivals, reviews and creators come from the live pipeline.
 // ---------------------------------------------------------------------------
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-const NEIGHBORHOODS = ["East Village", "Lower East Side", "West Village", "Williamsburg", "Greenpoint", "Midtown"];
 
 const SEED = {
-  city: "New York",
-  neighborhoods: NEIGHBORHOODS.map((name) => ({ name, placeId: `place-${slug(name)}` })),
-  adjacency: [
-    ["East Village", "Lower East Side"],
-    ["East Village", "West Village"],
-    ["Lower East Side", "Williamsburg"],
-    ["Williamsburg", "Greenpoint"],
-  ],
-  cuisines: ["Italian", "Desserts", "Pizza", "Bakery", "Mexican"],
-  themes: ["gluten-free", "takeout", "wait times", "price"],
-  restaurant: {
-    id: DEFAULT_RESTAURANT_ID,
-    name: "Osteria Pepe",
-    cuisine: "Italian",
-    cuisines: ["Italian", "Desserts"],
-    neighborhood: "East Village",
-    avg_check: 68,
-    slow_shifts: ["Tuesday dinner", "Wednesday lunch", "5:00 PM seatings"],
-  },
-  stocked: [
-    "pecorino romano", "black pepper", "guanciale", "eggs", "San Marzano tomatoes", "heavy cream",
-    "chili flakes", "mascarpone", "espresso", "ladyfingers", "burrata", "sourdough", "pistachio",
-  ],
-  menu: [
-    { id: "menu-cacio", name: "Cacio e Pepe", price: 24, food_cost: 3.2, ingredients: ["pecorino romano", "black pepper"] },
-    { id: "menu-carbonara", name: "Carbonara", price: 26, food_cost: 4.6, ingredients: ["guanciale", "eggs", "pecorino romano", "black pepper"] },
-    { id: "menu-vodka", name: "Spicy Rigatoni alla Vodka", price: 25, food_cost: 3.9, ingredients: ["San Marzano tomatoes", "heavy cream", "chili flakes"] },
-    { id: "menu-tiramisu", name: "Tiramisu", price: 14, food_cost: 2.1, ingredients: ["mascarpone", "espresso", "ladyfingers"] },
-    { id: "menu-burrata", name: "Burrata & Grilled Sourdough", price: 18, food_cost: 4.4, ingredients: ["burrata", "sourdough"] },
-  ],
-  trends: [
-    {
-      id: "ft-tableside-tiramisu", name: "Tableside Tiramisu", stage: "Accelerating", velocity_pct: 280,
-      visual_format: "tableside scoop from a family-size tray", hook: "Sensory ASMR",
-      audio: "slow-mo cream scoop sound (trending in NYC, last 48h)", est_weekly_revenue: 1400,
-      requires: ["mascarpone", "espresso", "ladyfingers"], fits: ["Desserts", "Italian"],
-    },
-    {
-      id: "ft-cheese-wheel", name: "Cheese-Wheel Pasta Toss", stage: "Emerging", velocity_pct: 190,
-      visual_format: "pasta flamed and tossed inside a pecorino wheel", hook: "Shock/Scale",
-      audio: "crowd-gasp reveal sound", est_weekly_revenue: 1100,
-      requires: ["pecorino romano", "black pepper", "pecorino wheel"], fits: ["Italian"],
-    },
-    {
-      id: "ft-pistachio-croissant", name: "Pistachio Crema Croissant", stage: "Accelerating", velocity_pct: 310,
-      visual_format: "cross-section ooze shot", hook: "Sensory ASMR",
-      audio: "flaky crunch close-up sound", est_weekly_revenue: 900,
-      requires: ["pistachio", "heavy cream", "croissants"], fits: ["Bakery", "Desserts"],
-    },
-    {
-      id: "ft-hot-honey", name: "Hot Honey Pepperoni Cups", stage: "Mainstream", velocity_pct: 120,
-      visual_format: "honey drizzle macro", hook: "Sensory ASMR", audio: "drip sound", est_weekly_revenue: 600,
-      requires: ["hot honey", "pepperoni"], fits: ["Pizza"],
-    },
-    {
-      id: "ft-birria", name: "Birria Tacos", stage: "Saturated", velocity_pct: 35,
-      visual_format: "consomme dip", hook: "Sensory ASMR", audio: "dip sound", est_weekly_revenue: 300,
-      requires: ["beef chuck", "corn tortillas"], fits: ["Mexican"],
-    },
-  ],
-  competitors: [
-    { id: "comp-via-roma", name: "Via Roma", cuisine: "Italian", neighborhood: "East Village", capitalizes_on: [] as string[] },
-    { id: "comp-lucky-slice", name: "Lucky Slice", cuisine: "Pizza", neighborhood: "East Village", capitalizes_on: ["ft-hot-honey"] },
-    { id: "comp-bk-rigatoni", name: "Brooklyn Rigatoni Co", cuisine: "Italian", neighborhood: "Williamsburg", capitalizes_on: ["ft-cheese-wheel"] },
-  ],
-  complaints: [
-    { id: "cp-viaroma-gf", competitor: "comp-via-roma", theme: "gluten-free", count_7d: 4, sample: "No real gluten-free pasta, just a sad salad." },
-    { id: "cp-viaroma-takeout", competitor: "comp-via-roma", theme: "takeout", count_7d: 6, sample: "Takeout carbonara arrived cold and clumpy." },
-    { id: "cp-lucky-wait", competitor: "comp-lucky-slice", theme: "wait times", count_7d: 9, sample: "Waited 50 minutes on a Tuesday." },
-    { id: "cp-bkrig-price", competitor: "comp-bk-rigatoni", theme: "price", count_7d: 5, sample: "$34 for rigatoni is wild." },
-  ],
-  strengths: [
-    { id: "str-gf", theme: "gluten-free", pitch: "house-made gluten-free rigatoni cooked in a dedicated pot" },
-    { id: "str-takeout", theme: "takeout", pitch: "pasta finished to order and packed in vented containers" },
-    { id: "str-wait", theme: "wait times", pitch: "walk-in tables open at 5 PM on weeknights" },
-  ],
-  // Seed creators carry audience data from their media kits; their posts drive location and rival checks.
-  creators: [
-    { id: "lc-evfoodcrawl", handle: "@evfoodcrawl", followers: 12000, local_audience_pct: 78, engagement_rate: 6.1, covers: ["Italian", "Desserts"] },
-    { id: "lc-wburgbites", handle: "@williamsburgbites", followers: 18000, local_audience_pct: 81, engagement_rate: 5.4, covers: ["Pizza", "Italian"] },
-    { id: "lc-pastaqueen", handle: "@pastaqueen.nyc", followers: 26000, local_audience_pct: 72, engagement_rate: 4.8, covers: ["Italian"] },
-    { id: "lc-lesnoodle", handle: "@lesnoodlegirl", followers: 9000, local_audience_pct: 74, engagement_rate: 7.2, covers: ["Italian"] },
-    { id: "lc-nycviral", handle: "@nycviralbites", followers: 240000, local_audience_pct: 11, engagement_rate: 1.2, covers: ["Pizza", "Mexican"] },
-    { id: "lc-greenpoint", handle: "@greenpointgrub", followers: 6000, local_audience_pct: 85, engagement_rate: 8.0, covers: ["Desserts", "Bakery"] },
-  ],
-  posts: [
-    { id: "sp-ev-1", creator: "lc-evfoodcrawl", place: "place-east-village", days_ago: 3, likes: 820, caption: "Best late-night slice crawl on Avenue A" },
-    { id: "sp-ev-2", creator: "lc-evfoodcrawl", place: "place-east-village", days_ago: 9, likes: 640, caption: "Dumplings under $10 in the East Village" },
-    { id: "sp-ev-3", creator: "lc-evfoodcrawl", place: "comp-via-roma", days_ago: 5, likes: 710, caption: "Via Roma carbonara to go... arrived lukewarm" },
-    { id: "sp-ev-4", creator: "lc-evfoodcrawl", place: "place-lower-east-side", days_ago: 14, likes: 530, caption: "Essex Market lunch run" },
-    { id: "sp-wb-1", creator: "lc-wburgbites", place: "place-lower-east-side", days_ago: 2, likes: 960, caption: "LES bagel ranking" },
-    { id: "sp-wb-2", creator: "lc-wburgbites", place: "place-lower-east-side", days_ago: 12, likes: 880, caption: "Orchard St hidden pasta bar" },
-    { id: "sp-wb-3", creator: "lc-wburgbites", place: "comp-lucky-slice", days_ago: 3, likes: 1020, caption: "50 minute wait for a slice. Worth it?" },
-    { id: "sp-wb-4", creator: "lc-wburgbites", place: "place-williamsburg", days_ago: 6, likes: 740, caption: "Bedford Ave brunch" },
-    { id: "sp-pq-1", creator: "lc-pastaqueen", place: "place-west-village", days_ago: 4, likes: 1300, caption: "Bleecker St fresh pasta tour" },
-    { id: "sp-pq-2", creator: "lc-pastaqueen", place: "place-west-village", days_ago: 10, likes: 1150, caption: "Hand-cut tagliatelle date night" },
-    { id: "sp-pq-3", creator: "lc-pastaqueen", place: "place-west-village", days_ago: 16, likes: 990, caption: "West Village pasta power ranking" },
-    { id: "sp-pq-4", creator: "lc-pastaqueen", place: DEFAULT_RESTAURANT_ID, days_ago: 12, likes: 1400, caption: "The cacio e pepe at Osteria Pepe is unreal" },
-    { id: "sp-ln-1", creator: "lc-lesnoodle", place: "place-lower-east-side", days_ago: 3, likes: 610, caption: "Hand-pulled noodles on Eldridge" },
-    { id: "sp-ln-2", creator: "lc-lesnoodle", place: "comp-via-roma", days_ago: 20, likes: 700, caption: "#ad Via Roma's new pasta menu", sponsored: true },
-    { id: "sp-ln-3", creator: "lc-lesnoodle", place: "place-lower-east-side", days_ago: 8, likes: 580, caption: "Ramen crawl part 2" },
-    { id: "sp-nv-1", creator: "lc-nycviral", place: "place-midtown", days_ago: 1, likes: 2100, caption: "Times Square food hall haul" },
-    { id: "sp-nv-2", creator: "lc-nycviral", place: "place-midtown", days_ago: 4, likes: 1900, caption: "Rating every hot dog cart" },
-    { id: "sp-nv-3", creator: "lc-nycviral", place: "place-midtown", days_ago: 7, likes: 2400, caption: "$1 pizza challenge" },
-    { id: "sp-gp-1", creator: "lc-greenpoint", place: "place-greenpoint", days_ago: 2, likes: 520, caption: "Polish bakery morning" },
-    { id: "sp-gp-2", creator: "lc-greenpoint", place: "place-greenpoint", days_ago: 5, likes: 480, caption: "Manhattan Ave pastry run" },
-    { id: "sp-gp-3", creator: "lc-greenpoint", place: "place-williamsburg", days_ago: 9, likes: 450, caption: "Croissant face-off" },
-  ],
+  city: KOCHI.city,
+  neighborhoods: KOCHI.neighborhoods.map((name) => ({ name, placeId: `place-${slug(name)}` })),
+  adjacency: KOCHI.adjacency,
+  cuisines: KOCHI.cuisines,
+  themes: KOCHI.themes,
+  restaurant: KOCHI.restaurant,
+  stocked: Array.from(new Set(KOCHI.menu.flatMap((m) => m.ingredients))),
+  menu: KOCHI.menu,
+  trends: KOCHI.trends,
+  strengths: KOCHI.strengths,
 };
 
 const SEED_CYPHER: string[] = [
@@ -157,8 +59,15 @@ const SEED_CYPHER: string[] = [
   `UNWIND $cuisines AS c MERGE (:Cuisine {name: c})`,
   `UNWIND $themes AS t MERGE (:Theme {name: t})`,
   `MERGE (r:Restaurant {id: $restaurant.id})
-   SET r:Place, r.name = $restaurant.name, r.cuisine = $restaurant.cuisine, r.avg_check = $restaurant.avg_check,
-       r.slow_shifts = $restaurant.slow_shifts, r.kind = 'restaurant', r.seed_version = $seedVersion
+   SET r:Place, r += {
+         name: $restaurant.name, cuisine: $restaurant.cuisine, concept: $restaurant.concept, chef: $restaurant.chef,
+         award: $restaurant.award, address: $restaurant.address, lat: $restaurant.lat, lng: $restaurant.lng,
+         website: $restaurant.website, instagram: $restaurant.instagram, reservations: $restaurant.reservations,
+         hours: $restaurant.hours, tasting_price: $restaurant.tasting_price, pairing_price: $restaurant.pairing_price,
+         avg_check: $restaurant.avg_check, slow_shifts: $restaurant.slow_shifts,
+         sister_restaurants: $restaurant.sister_restaurants, google_place_id: $restaurant.google_place_id,
+         instagram_location_id: $restaurant.instagram_location_id, kind: 'restaurant', seed_version: $seedVersion
+       }
    WITH r
    MATCH (n:Neighborhood {name: $restaurant.neighborhood})
    MERGE (r)-[:IN]->(n)
@@ -173,8 +82,7 @@ const SEED_CYPHER: string[] = [
   `MATCH (r:Restaurant {id: $restaurant.id})
    UNWIND $menu AS item
    MERGE (m:MenuItem {id: item.id})
-   SET m.name = item.name, m.price = item.price, m.food_cost = item.food_cost,
-       m.margin = round(1 - item.food_cost / item.price, 2)
+   SET m.name = item.name, m.course = true
    MERGE (r)-[:SERVES]->(m)
    WITH m, item
    UNWIND item.ingredients AS ing
@@ -183,7 +91,7 @@ const SEED_CYPHER: string[] = [
   `UNWIND $trends AS t
    MERGE (ft:FoodTrend {id: t.id})
    SET ft.name = t.name, ft.stage = t.stage, ft.velocity_pct = t.velocity_pct, ft.visual_format = t.visual_format,
-       ft.hook = t.hook, ft.audio = t.audio, ft.est_weekly_revenue = t.est_weekly_revenue
+       ft.hook = t.hook, ft.audio = t.audio, ft.est_weekly_revenue = t.est_weekly_revenue, ft.illustrative = true
    WITH ft, t
    CALL {
      WITH ft, t
@@ -195,45 +103,30 @@ const SEED_CYPHER: string[] = [
    UNWIND t.fits AS cu
    MATCH (c:Cuisine {name: cu})
    MERGE (ft)-[:FITS]->(c)`,
-  `UNWIND $competitors AS c
-   MERGE (comp:Competitor {id: c.id})
-   SET comp:Place, comp.name = c.name, comp.cuisine = c.cuisine, comp.kind = 'competitor'
-   WITH comp, c
-   MATCH (n:Neighborhood {name: c.neighborhood})
-   MERGE (comp)-[:IN]->(n)
-   WITH comp, c
-   MATCH (cu:Cuisine {name: c.cuisine})
-   MERGE (comp)-[:SERVES_CUISINE]->(cu)
-   WITH comp, c
-   UNWIND c.capitalizes_on AS tid
-   MATCH (t:FoodTrend {id: tid})
-   MERGE (comp)-[:CAPITALIZES_ON]->(t)`,
-  `UNWIND $complaints AS cp
-   MATCH (comp:Competitor {id: cp.competitor}), (t:Theme {name: cp.theme})
-   MERGE (x:Complaint {id: cp.id}) SET x.sample = cp.sample, x.name = cp.theme + ' complaint'
-   MERGE (comp)-[h:HAS_COMPLAINT]->(x) SET h.count_7d = cp.count_7d
-   MERGE (x)-[:ABOUT]->(t)`,
   `MATCH (r:Restaurant {id: $restaurant.id})
    UNWIND $strengths AS s
    MATCH (t:Theme {name: s.theme})
    MERGE (st:Strength {id: s.id}) SET st.pitch = s.pitch, st.name = s.pitch
    MERGE (r)-[:HAS_STRENGTH]->(st)
    MERGE (st)-[:ADDRESSES]->(t)`,
-  `UNWIND $creators AS c
-   MERGE (lc:LocalCreator {id: c.id})
-   SET lc.handle = c.handle, lc.followers = c.followers, lc.local_audience_pct = c.local_audience_pct,
-       lc.engagement_rate = c.engagement_rate, lc.source = 'seed'
-   WITH lc, c
-   UNWIND c.covers AS cu
-   MATCH (k:Cuisine {name: cu})
-   MERGE (lc)-[:COVERS]->(k)`,
-  `UNWIND $posts AS p
-   MATCH (lc:LocalCreator {id: p.creator}), (pl:Place {id: p.place})
-   MERGE (post:Post {id: p.id})
-   SET post.posted_at = datetime() - duration({days: p.days_ago}), post.likes = p.likes,
-       post.caption = p.caption, post.sponsored = coalesce(p.sponsored, false), post.source = 'seed'
-   MERGE (lc)-[:POSTED]->(post)
-   MERGE (post)-[:AT]->(pl)`,
+];
+
+const PRUNE_CYPHER: string[] = [
+  `MATCH (r:Restaurant) WHERE r.id <> $rid DETACH DELETE r`,
+  `MATCH (t:FoodTrend) WHERE NOT t.id IN $trendIds DETACH DELETE t`,
+  `MATCH (c:LocalCreator) WHERE coalesce(c.source, 'seed') <> 'treg'
+   OPTIONAL MATCH (c)-[:POSTED]->(p:Post)
+   DETACH DELETE c, p`,
+  `MATCH (c:Competitor) WHERE coalesce(c.source, 'seed') <> 'treg'
+   OPTIONAL MATCH (c)-[:HAS_COMPLAINT]->(x:Complaint)
+   DETACH DELETE c, x`,
+  `MATCH (x:Complaint) WHERE NOT EXISTS { ()-[:HAS_COMPLAINT]->(x) } DETACH DELETE x`,
+  `MATCH (m:MenuItem) WHERE NOT EXISTS { (:Restaurant)-[:SERVES]->(m) } DETACH DELETE m`,
+  `MATCH (s:Strength) WHERE NOT EXISTS { (:Restaurant)-[:HAS_STRENGTH]->(s) } DETACH DELETE s`,
+  `MATCH (p:Post) WHERE NOT EXISTS { (:LocalCreator)-[:POSTED]->(p) } DETACH DELETE p`,
+  `MATCH ()-[x:LOCATED_IN|COMPETES_IN|AUDIENCE_LOCATED_IN|PROMOTED]->() DELETE x`,
+  `MATCH (i:Ingredient) WHERE NOT EXISTS { (i)--() } DELETE i`,
+  `MATCH (p:Place) WHERE NOT p:Restaurant AND NOT p:Competitor AND NOT EXISTS { (p)--() } DELETE p`,
 ];
 
 let seededFor: string | null = null;
@@ -253,6 +146,12 @@ export async function ensureHospitalitySeed(driver: Driver, restaurantId: string
             await tx.run(`MATCH (n) WHERE any(l IN labels(n) WHERE l IN $labels) DETACH DELETE n`, { labels: HOSPITALITY_LABELS });
             const params = { ...SEED, seedVersion: SEED_VERSION };
             for (const stmt of SEED_CYPHER) await tx.run(stmt, params);
+          });
+        }
+        // Remove anything an older deployment (or another restaurant's seed) left in the shared database.
+        if (restaurantId === DEFAULT_RESTAURANT_ID) {
+          await session.executeWrite(async (tx) => {
+            for (const stmt of PRUNE_CYPHER) await tx.run(stmt, { rid: restaurantId, trendIds: KOCHI.trends.map((t) => t.id) });
           });
         }
         seededFor = restaurantId;
@@ -308,6 +207,19 @@ export interface RestaurantProfile {
   city: string;
   avgCheck: number;
   slowShifts: string[];
+  concept?: string;
+  chef?: string;
+  award?: string;
+  address?: string;
+  website?: string;
+  instagram?: string;
+  hours?: string;
+  tastingPrice?: number;
+  lat?: number;
+  lng?: number;
+  googlePlaceId?: string;
+  instagramLocationId?: string;
+  sisterRestaurants?: string[];
 }
 
 export async function getRestaurant(driver: Driver, rid = DEFAULT_RESTAURANT_ID): Promise<RestaurantProfile> {
@@ -316,7 +228,11 @@ export async function getRestaurant(driver: Driver, rid = DEFAULT_RESTAURANT_ID)
     driver,
     `MATCH (r:Restaurant {id: $rid})-[:IN]->(n:Neighborhood)-[:IN_CITY]->(c:City)
      RETURN r.id AS id, r.name AS name, r.cuisine AS cuisine, n.name AS neighborhood,
-            c.name AS city, r.avg_check AS avgCheck, r.slow_shifts AS slowShifts`,
+            c.name AS city, r.avg_check AS avgCheck, r.slow_shifts AS slowShifts,
+            r.concept AS concept, r.chef AS chef, r.award AS award, r.address AS address, r.website AS website,
+            r.instagram AS instagram, r.hours AS hours, r.tasting_price AS tastingPrice, r.lat AS lat, r.lng AS lng,
+            r.google_place_id AS googlePlaceId, r.instagram_location_id AS instagramLocationId,
+            coalesce(r.sister_restaurants, []) AS sisterRestaurants`,
     { rid }
   );
   if (!row) throw new Error(`Restaurant ${rid} not found in the graph`);
@@ -376,8 +292,9 @@ ORDER BY best IS NULL, best.velocity DESC`;
 export interface PostPlan {
   id: string;
   dish: string;
-  price: number;
-  margin: number;
+  /** null when the restaurant doesn't publish per-dish prices (e.g. a tasting menu) */
+  price: number | null;
+  margin: number | null;
   ingredients: string[];
   best: { trend: string; stage: string; velocity: number; hook: string; audio: string; format: string; overlap: number } | null;
 }
@@ -487,8 +404,10 @@ export const RIVAL_INTEL_CYPHER = `
 MATCH (r:Restaurant {id: $rid})-[:IN]->(home:Neighborhood)<-[:IN]-(comp:Competitor)
 MATCH (comp)-[h:HAS_COMPLAINT]->(cp:Complaint)-[:ABOUT]->(t:Theme)
 OPTIONAL MATCH (r)-[:HAS_STRENGTH]->(s:Strength)-[:ADDRESSES]->(t)
-RETURN comp.name AS competitor, comp.cuisine AS cuisine, t.name AS theme, cp.sample AS sample,
-       h.count_7d AS mentions, s.pitch AS ourAnswer,
+RETURN comp.name AS competitor, comp.cuisine AS cuisine, comp.rating AS rating, comp.review_count AS reviewCount,
+       comp.address AS address, comp.google_url AS googleUrl, cp.reviews_checked AS reviewsChecked,
+       t.name AS theme, cp.sample AS sample, cp.sample_date AS sampleDate, cp.sample_rating AS sampleRating,
+       h.count AS mentions, s.pitch AS ourAnswer,
        [(c:LocalCreator)-[:POSTED]->(p:Post)-[:AT]->(comp) WHERE NOT coalesce(p.sponsored, false)
           AND p.posted_at > datetime() - duration('P30D') | c.handle] AS recentVisitors
 ORDER BY mentions DESC`;
@@ -498,6 +417,15 @@ export interface RivalComplaint {
   cuisine: string;
   theme: string;
   sample: string;
+  sampleDate: string | null;
+  sampleRating: number | null;
+  rating: number | null;
+  reviewCount: number | null;
+  address: string | null;
+  googleUrl: string | null;
+  /** How many of the rival's recent Google reviews were read */
+  reviewsChecked: number;
+  /** Recent reviews that raised this theme */
   mentions: number;
   ourAnswer: string | null;
   /** Creators who posted (unpaid) from this rival in the last 30 days */
@@ -632,7 +560,7 @@ LIMIT 3`,
 MATCH (r:Restaurant {id: $rid})-[:IN]->(home:Neighborhood)
 MATCH path = (comp:Competitor)-[h:HAS_COMPLAINT]->(:Complaint)-[:ABOUT]->(t:Theme)<-[:ADDRESSES]-(s:Strength)<-[:HAS_STRENGTH]-(r)
 WHERE EXISTS { (comp)-[:IN]->(home) }
-RETURN comp.name AS rival, t.name AS theme, h.count_7d AS mentions, s.pitch AS pitch, ${PATH_IDS}
+RETURN comp.name AS rival, t.name AS theme, h.count AS mentions, s.pitch AS pitch, ${PATH_IDS}
 ORDER BY mentions DESC
 LIMIT 3`,
   "open-trend": `
@@ -677,34 +605,40 @@ export async function getInsights(driver: Driver, rid = DEFAULT_RESTAURANT_ID): 
     const m = new Map<string, any>();
     for (const r of rows) {
       const g = m.get(key(r));
-      if (!g) m.set(key(r), { ...r, nodeIds: [...r.nodeIds], relIds: [...r.relIds], themes: [r.theme], pitches: [r.pitch], cuisines: [r.cuisine] });
+      if (!g) m.set(key(r), { ...r, nodeIds: [...r.nodeIds], relIds: [...r.relIds], themes: [r.theme], pitches: [r.pitch], cuisines: [r.cuisine], dishes: [r.dish] });
       else {
         g.nodeIds.push(...r.nodeIds);
         g.relIds.push(...r.relIds);
         g.themes.push(r.theme);
         g.pitches.push(r.pitch);
         g.cuisines.push(r.cuisine);
+        g.dishes.push(r.dish);
       }
     }
     return Array.from(m.values());
   };
   const and = (xs: string[]) => uniq(xs.filter(Boolean)).join(" and ");
+  const firstLine = (t: string) => {
+    const line = String(t ?? "").split(/\n/)[0].trim();
+    return line.length > 90 ? `${line.slice(0, 87)}…` : line;
+  };
+  const days = (n: number) => (n === 0 ? "today" : n === 1 ? "yesterday" : `${n} days ago`);
   return [
     ...group(conquest, (r) => `${r.creator}|${r.rival}`).map((r: any, i: number) =>
       make("conquest", i, r, `Conquest invite: ${r.creator}`,
         `${r.creator} just ate at ${r.rival}, which is taking heat for ${and(r.themes)}. Your ${and(r.pitches)} answer that, so invite them to compare.`)),
     ...warm.map((r: any, i: number) =>
       make("warm-lead", i, r, `Warm lead: ${r.creator}`,
-        `${r.creator} already posted from you ${r.daysAgo} days ago ("${r.caption}"). Thank them and offer a first look at a new dish.`)),
-    ...pantry.map((r: any, i: number) =>
+        `${r.creator} posted from you ${days(r.daysAgo)}: "${firstLine(r.caption)}" Thank them and offer a first look at a new dish.`)),
+    ...group(pantry, (r) => r.trend).map((r: any, i: number) =>
       make("pantry-trend", i, r, `Ready now: ${r.trend}`,
-        `+${r.velocity}% and every ingredient is already in your pantry, carried by your ${r.dish}.`)),
+        `+${r.velocity}% and every ingredient is already in your pantry, carried by your ${and(r.dishes)}.`)),
     ...gaps.map((r: any, i: number) =>
       make("rival-gap", i, r, `${r.rival}'s weak spot: ${r.theme}`,
-        `${r.mentions} complaints this week. Answer with your ${r.pitch}.`)),
+        `${r.mentions} of their recent Google reviews ${r.mentions === 1 ? "complains" : "complain"} about ${r.theme}. Answer with your ${r.pitch}.`)),
     ...group(open, (r) => r.trend).map((r: any, i: number) =>
       make("open-trend", i, r, `Open lane: ${r.trend}`,
-        `Fits your ${and(r.cuisines)} menu (+${r.velocity}%) and no rival nearby is doing it yet.`)),
+        `Fits your ${and(r.cuisines)} menu (+${r.velocity}%) and no tracked rival nearby is on it.`)),
     ...fit.map((r: any, i: number) =>
       make("cuisine-fit", i, r, `Cuisine match: ${r.creator}`,
         `Covers ${r.cuisines.join(" and ")}, the same food you serve.`)),
@@ -736,7 +670,7 @@ export function detectIntent(message: string): Intent {
 }
 
 const usd = (n: unknown) => `$${Number(n).toLocaleString("en-US")}`;
-const k = (n: unknown) => `${Math.round(Number(n) / 1000)}k`;
+const k = (n: unknown) => (Number(n) >= 10000 ? `${Math.round(Number(n) / 1000)}k` : `${(Number(n) / 1000).toFixed(1)}k`);
 
 function speakTrends(board: BoardTrend[]): { speech: string; mood: Mood } {
   const rising = board
@@ -748,7 +682,7 @@ function speakTrends(board: BoardTrend[]): { speech: string; mood: Mood } {
     top.missing.length === 0
       ? `${top.name} is ${top.stage.toLowerCase()} at +${top.velocity}% and you already stock everything: ${top.have.join(", ")}. That's about ${usd(top.weeklyRevenue)} a week sitting in your walk-in.`
       : `${top.name} is ${top.stage.toLowerCase()} at +${top.velocity}%. You'd just need ${top.missing.join(", ")}.`;
-  s += top.rivalsOnIt.length ? ` Heads up: ${top.rivalsOnIt.join(", ")} already rides it.` : " No rival nearby is doing it yet.";
+  s += top.rivalsOnIt.length ? ` Heads up: ${top.rivalsOnIt.join(", ")} already rides it.` : " No tracked rival nearby is on it.";
   if (next) s += ` Runner-up: ${next.name} (+${next.velocity}%), missing ${next.missing.join(", ") || "nothing"}.`;
   return { speech: s, mood: "excited" };
 }
@@ -770,7 +704,7 @@ function speakCompetitors(rivals: RivalComplaint[]): { speech: string; mood: Moo
   if (!rivals.length) return { speech: "The block is quiet, no fresh complaints about your neighbors this week.", mood: "speaking" };
   const sorted = [...rivals].sort((a, b) => Number(!!b.ourAnswer) - Number(!!a.ourAnswer) || b.mentions - a.mentions);
   const top = sorted[0];
-  let s = `${top.competitor} took ${top.mentions} hits on ${top.theme} this week: "${top.sample}"`;
+  let s = `${top.mentions} of ${top.competitor}'s recent Google reviews ${top.mentions === 1 ? "complains" : "complain"} about ${top.theme}: "${top.sample}"`;
   s += top.ourAnswer ? ` That's our opening. Post a Reel about your ${top.ourAnswer}.` : " We don't have an answer for that one yet.";
   if (top.recentVisitors.length) s += ` And ${top.recentVisitors.join(", ")} just ate there; invite them to compare.`;
   const other = sorted.slice(1).find((r) => r.ourAnswer && r.competitor !== top.competitor);
@@ -783,7 +717,7 @@ function speakPost(plans: PostPlan[]): { speech: string; mood: Mood } {
   if (!p?.best) return { speech: "None of your dishes line up with a live trend yet. Ask me for menu ideas instead.", mood: "speaking" };
   const b = p.best;
   return {
-    speech: `Film your ${p.dish} as a ${b.trend} moment (+${b.velocity}%). ${b.hook} hook: clip 1, 1.5s macro of the ${b.format}; clip 2, 2s of the plating; clip 3, the first bite. Use the ${b.audio}. You keep ${Math.round(p.margin * 100)}% of every one you sell.`,
+    speech: `Film your ${p.dish} as a ${b.trend} moment (+${b.velocity}%). ${b.hook} hook: clip 1, 1.5s macro of the ${b.format}; clip 2, 2s of the plating; clip 3, the first bite. Use the ${b.audio}.${p.margin !== null ? ` You keep ${Math.round(p.margin * 100)}% of every one you sell.` : ""}`,
     mood: "excited",
   };
 }

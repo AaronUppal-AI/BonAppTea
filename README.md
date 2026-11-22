@@ -35,7 +35,13 @@ cp .env.local.example .env.local   # then fill in your keys
 npm run dev
 ```
 
-Open http://localhost:3000. On the first question, Chef Pepper seeds a demo East Village restaurant ("Osteria Pepe") and its neighborhood into your Neo4j database.
+Open http://localhost:3000. The first request seeds **Kochi** (652 10th Ave, Hell's Kitchen) into your Neo4j database: its real menu and facts from [kochinyc.com](https://www.kochinyc.com/). Then run the live pipeline once:
+
+```bash
+curl -X POST http://localhost:3000/api/pipeline/run   # rivals + reviews, creators (Treg), trend proof (You.com); ~5¢
+```
+
+In production the pipeline route is disabled unless `PIPELINE_TOKEN` is set and sent as `x-pipeline-token`.
 
 ### Environment variables
 
@@ -45,6 +51,8 @@ Open http://localhost:3000. On the first question, Chef Pepper seeds a demo East
 | `YOU_API_KEY` | You.com search and verification |
 | `TREG_API_KEY` | Treg tool calls |
 | `MASKO_API_KEY`, `MASKO_API_BASE_URL` | Masko mascot generation |
+| `TREG_API_KEY` | Live rivals, reviews and creators |
+| `PIPELINE_TOKEN` (optional) | Allows `/api/pipeline/run` in production |
 
 `.env.local` is git-ignored. Never commit keys.
 
@@ -96,7 +104,7 @@ The **Knowledge Graph** tab lists multi-hop opportunity paths, such as *creator 
 
 ## Status
 
-Restaurant, menu, trend and competitor data in the graph is demo seed data for one East Village restaurant. Creators are a mix of demo data and **live creators discovered through Treg** (marked "Live · Treg").
+The demo restaurant is **Kochi**, a one-Michelin-star Korean tasting-menu restaurant in Hell's Kitchen. Its menu, ingredients, price and facts come from its website. Everything about the outside world is live: rivals and their Google reviews (Treg → Google Maps), creators who posted from Kochi or under Hell's Kitchen food hashtags (Treg → Instagram), and web proof for each trend (You.com). Trend stage, velocity and weekly-upside figures are illustrative. There are no made-up creators or complaints.
 
 ### Live creator discovery (Treg → Neo4j)
 
