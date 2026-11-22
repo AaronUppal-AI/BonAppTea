@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import { Header } from "@/components/Header";
+import { BrowseHome } from "@/components/BrowseHome";
+import { MatrixRain } from "@/components/MatrixRain";
 import { TrackChefPepper } from "@/components/TrackChefPepper";
 import { TrackKnowledgeGraph } from "@/components/TrackKnowledgeGraph";
 import { TrackTrendRadar } from "@/components/TrackTrendRadar";
@@ -14,7 +16,7 @@ import { AboutModal, AboutSection } from "@/components/AboutModal";
 import { TrackType } from "@/types";
 
 export default function Home() {
-  const [activeTrack, setActiveTrack] = useState<TrackType>("chef-pepper");
+  const [activeTrack, setActiveTrack] = useState<TrackType>("home");
   const [focusTrend, setFocusTrend] = useState<string | null>(null);
   const [isJudgeDemoOpen, setIsJudgeDemoOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -24,18 +26,21 @@ export default function Home() {
   const [hashRead, setHashRead] = useState(false);
   useEffect(() => {
     const fromHash = window.location.hash.slice(1) as TrackType;
-    const valid: TrackType[] = ["chef-pepper", "knowledge-graph", "trend-radar", "dish-to-post", "creator-scout", "intel-desk"];
+    const valid: TrackType[] = ["home", "chef-pepper", "knowledge-graph", "trend-radar", "dish-to-post", "creator-scout", "intel-desk"];
     if (valid.includes(fromHash)) setActiveTrack(fromHash);
     if ((fromHash as string) === "about" || (fromHash as string) === "pricing") setAbout(fromHash as unknown as AboutSection);
     setHashRead(true);
   }, []);
   useEffect(() => {
     if (hashRead) window.history.replaceState(null, "", `#${activeTrack}`);
+    window.scrollTo({ top: 0 });
   }, [activeTrack, hashRead]);
 
 
   return (
-    <div className="min-h-screen bg-neutral-950 flex flex-col font-sans">
+    <div className="relative min-h-screen flex flex-col font-sans">
+      <MatrixRain opacity={activeTrack === "home" ? 0.9 : 0.6} />
+      <div className="scanlines" aria-hidden="true" />
       <Header
         activeTrack={activeTrack}
         setActiveTrack={setActiveTrack}
@@ -46,7 +51,8 @@ export default function Home() {
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        <section className="bg-neutral-900/30 rounded-2xl border border-neutral-800/80 p-5 shadow-2xl">
+        {activeTrack === "home" && <BrowseHome onNavigate={setActiveTrack} />}
+        <section className={activeTrack === "home" ? "hidden" : "glass rounded-3xl p-5 sm:p-6 animate-fade-up"}>
           {activeTrack === "chef-pepper" && <TrackChefPepper />}
           {activeTrack === "knowledge-graph" && <TrackKnowledgeGraph />}
           {activeTrack === "trend-radar" && (
@@ -63,7 +69,7 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="border-t border-neutral-900 bg-neutral-950/80 py-4 text-xs text-neutral-500">
+      <footer className="border-t border-white/5 bg-neutral-950/60 backdrop-blur py-4 text-xs text-neutral-400 font-mono">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>BonAppTea · Fill your slow shifts with trends, creators and rival intel</span>
           <span className="text-neutral-400">Data: restaurant website · Google Maps &amp; Instagram via Treg · You.com · Neo4j</span>

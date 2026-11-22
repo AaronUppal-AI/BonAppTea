@@ -76,11 +76,11 @@ export const TrackHeader: React.FC<{ icon: React.ReactNode; title: string; subti
 }) => (
   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-4 border-b border-neutral-800">
     <div>
-      <h2 className="text-lg font-bold text-white flex items-center gap-2">
+      <h2 className="text-lg sm:text-xl text-white flex items-center gap-2">
         {icon}
-        <span>{title}</span>
+        <span className="font-display chrome-text tracking-wide">{title}</span>
       </h2>
-      <p className="text-xs text-neutral-400">{subtitle}</p>
+      <p className="text-xs text-neutral-300 mt-1">{subtitle}</p>
     </div>
     {right}
   </div>

@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { ChefHat, Send, Volume2, VolumeX } from "lucide-react";
 import type { GraphQueryTrace } from "@/types";
 import { TrackHeader, FreshnessLine } from "./ui";
+import { useCutout } from "./useCutout";
 import type { Freshness } from "./ui";
 
 type Mood = "idle" | "speaking" | "thinking" | "alert" | "excited";
@@ -55,6 +56,7 @@ const Trace: React.FC<{ queries: GraphQueryTrace[] }> = ({ queries }) => {
 };
 
 export const TrackChefPepper: React.FC = () => {
+  const chef = useCutout("/masko/chef-pepper.png");
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "chef",
@@ -131,12 +133,15 @@ export const TrackChefPepper: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Chef portrait */}
         <div className="lg:col-span-4 flex flex-col items-center text-center gap-3">
-          <div className={`relative w-48 h-48 sm:w-56 sm:h-56 rounded-3xl overflow-hidden ring-4 ${moodRing[mood]} transition shadow-2xl`}>
+          <div
+            className={`relative w-48 h-48 sm:w-56 sm:h-56 rounded-full ring-2 ${moodRing[mood]} transition shadow-2xl glass`}
+            style={{ background: "radial-gradient(70% 70% at 50% 40%, rgba(124,255,196,0.22), rgba(168,216,255,0.08) 60%, transparent 75%)" }}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/masko/chef-pepper.png" alt="Chef Pepper" className="w-full h-full object-cover" />
+            <img src={chef} alt="Chef Pepper" className="absolute inset-0 w-full h-full object-contain p-3 drop-shadow-[0_0_24px_rgba(124,255,196,0.35)]" />
           </div>
           <div>
-            <div className="text-base font-bold text-white">Chef Pepper</div>
+            <div className="font-display chrome-text text-base">Chef Pepper</div>
             <div className="text-[11px] font-mono uppercase tracking-widest text-neutral-400">{mood}</div>
           </div>
           <p className="text-[11px] text-neutral-500 max-w-xs">

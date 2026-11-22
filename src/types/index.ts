@@ -1,4 +1,4 @@
-export type TrackType = "chef-pepper" | "knowledge-graph" | "dish-to-post" | "trend-radar" | "creator-scout" | "intel-desk";
+export type TrackType = "home" | "chef-pepper" | "knowledge-graph" | "dish-to-post" | "trend-radar" | "creator-scout" | "intel-desk";
 
 export type {
   RestaurantProfile,
