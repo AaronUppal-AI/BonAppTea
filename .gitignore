@@ -41,3 +41,7 @@ next-env.d.ts
 
 # private docs
 PlatedOS_Business_Plan.md
+
+.vercel
+.env*
+!.env.local.example
