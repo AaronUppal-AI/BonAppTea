@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Radio, Clapperboard, Users, Binoculars, Play, Settings } from "lucide-react";
+import { Radio, Clapperboard, Users, Binoculars, Play, Settings, ChefHat } from "lucide-react";
 import { TrackType } from "@/types";
 
 interface HeaderProps {
@@ -20,6 +20,7 @@ interface Status {
 }
 
 const TRACKS: { id: TrackType; label: string; icon: React.ReactNode; active: string }[] = [
+  { id: "chef-pepper", label: "Chef Pepper", icon: <ChefHat className="w-3.5 h-3.5" />, active: "bg-rose-600/20 text-rose-300 border-rose-500/40" },
   { id: "trend-radar", label: "Trend Radar", icon: <Radio className="w-3.5 h-3.5" />, active: "bg-amber-600/20 text-amber-300 border-amber-500/40" },
   { id: "dish-to-post", label: "Dish-to-Post", icon: <Clapperboard className="w-3.5 h-3.5" />, active: "bg-pink-600/20 text-pink-300 border-pink-500/40" },
   { id: "creator-scout", label: "Creator Scout", icon: <Users className="w-3.5 h-3.5" />, active: "bg-emerald-600/20 text-emerald-300 border-emerald-500/40" },

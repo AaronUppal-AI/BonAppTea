@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Header } from "@/components/Header";
+import { TrackChefPepper } from "@/components/TrackChefPepper";
 import { TrackTrendRadar } from "@/components/TrackTrendRadar";
 import { TrackDishToPost } from "@/components/TrackDishToPost";
 import { TrackCreatorScout } from "@/components/TrackCreatorScout";
@@ -13,7 +14,7 @@ import { SettingsModal } from "@/components/SettingsModal";
 import { TrackType, GraphNode, GraphEdge } from "@/types";
 
 export default function Home() {
-  const [activeTrack, setActiveTrack] = useState<TrackType>("trend-radar");
+  const [activeTrack, setActiveTrack] = useState<TrackType>("chef-pepper");
   const [focusTrend, setFocusTrend] = useState<string | null>(null);
   const [graph, setGraph] = useState<{ nodes: GraphNode[]; edges: GraphEdge[] }>({ nodes: [], edges: [] });
   const [graphError, setGraphError] = useState<string | null>(null);
@@ -42,6 +43,7 @@ export default function Home() {
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         <section className="bg-neutral-900/30 rounded-2xl border border-neutral-800/80 p-5 shadow-2xl">
+          {activeTrack === "chef-pepper" && <TrackChefPepper />}
           {activeTrack === "trend-radar" && (
             <TrackTrendRadar
               onPlanPost={(trend) => {
@@ -55,13 +57,16 @@ export default function Home() {
           {activeTrack === "intel-desk" && <TrackIntelDesk />}
         </section>
 
+        {/* On the Chef Pepper tab the chat is the main panel, so the graph takes the full width. */}
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-7 h-[460px]">
+          <div className={`${activeTrack === "chef-pepper" ? "lg:col-span-12" : "lg:col-span-7"} h-[460px]`}>
             <Neo4jGraphVisualizer nodes={graph.nodes} edges={graph.edges} error={graphError} />
           </div>
-          <div className="lg:col-span-5 min-h-[460px]">
-            <MaskoAvatarWidget />
-          </div>
+          {activeTrack !== "chef-pepper" && (
+            <div className="lg:col-span-5 min-h-[460px]">
+              <MaskoAvatarWidget />
+            </div>
+          )}
         </section>
       </main>
 
