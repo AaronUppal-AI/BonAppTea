@@ -26,13 +26,21 @@ export const NODE_STYLE: Record<string, { color: string; name: string; size: num
   Cuisine: { color: "#facc15", name: "Cuisine", size: 16 },
   Neighborhood: { color: "#64748b", name: "Neighborhood", size: 18 },
   City: { color: "#475569", name: "City", size: 20 },
+  TimeSlot: { color: "#5eead4", name: "Time slot", size: 9 },
+  Hashtag: { color: "#f0abfc", name: "Hashtag", size: 9 },
+  Account: { color: "#cbd5e1", name: "Account", size: 9 },
 };
 
+// Detail-level types are shown in their own lenses, not in "Everything"
+const DETAIL_TYPES = ["TimeSlot", "Hashtag", "Account"];
+
 export const LENSES: { id: string; label: string; types: string[] }[] = [
-  { id: "all", label: "Everything", types: Object.keys(NODE_STYLE) },
+  { id: "all", label: "Everything", types: Object.keys(NODE_STYLE).filter((t) => !DETAIL_TYPES.includes(t)) },
   { id: "menu", label: "Menu × Trends", types: ["Restaurant", "MenuItem", "Ingredient", "FoodTrend", "Cuisine", "WebSource", "Competitor"] },
   { id: "creators", label: "Creators", types: ["Restaurant", "LocalCreator", "Post", "Place", "Competitor", "Neighborhood", "Cuisine"] },
   { id: "rivals", label: "Rivals", types: ["Restaurant", "Competitor", "Complaint", "Theme", "Strength", "Neighborhood", "FoodTrend"] },
+  { id: "busy", label: "Busy times", types: ["Restaurant", "Competitor", "TimeSlot"] },
+  { id: "social", label: "Hashtags", types: ["LocalCreator", "Post", "Hashtag", "FoodTrend", "Account", "Restaurant"] },
 ];
 
 interface Props {

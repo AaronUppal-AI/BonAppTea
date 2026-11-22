@@ -23,7 +23,8 @@ const SEED_VERSION = 4;
 
 export const HOSPITALITY_LABELS = [
   "City", "Neighborhood", "Place", "Restaurant", "Competitor", "MenuItem", "Ingredient", "FoodTrend",
-  "WebSource", "Cuisine", "Theme", "Complaint", "Strength", "LocalCreator", "Post",
+  "WebSource", "Cuisine", "Theme", "Complaint", "Strength", "LocalCreator", "Post", "Comp", "Booking",
+  "TimeSlot", "Hashtag", "Account",
 ];
 
 // ---------------------------------------------------------------------------
@@ -115,14 +116,14 @@ const SEED_CYPHER: string[] = [
 const FOREIGN_DATA_CHECK = `
 RETURN EXISTS { MATCH (r:Restaurant) WHERE r.id <> $rid }
     OR EXISTS { MATCH (t:FoodTrend) WHERE NOT t.id IN $trendIds }
-    OR EXISTS { MATCH (c:LocalCreator) WHERE coalesce(c.source, 'seed') <> 'treg' }
+    OR EXISTS { MATCH (c:LocalCreator) WHERE NOT coalesce(c.source, 'seed') IN ['treg', 'sample'] }
     OR EXISTS { MATCH (c:Competitor) WHERE coalesce(c.source, 'seed') <> 'treg' }
     OR EXISTS { MATCH ()-[x:LOCATED_IN|COMPETES_IN|AUDIENCE_LOCATED_IN|PROMOTED]->() } AS foreign`;
 
 const PRUNE_CYPHER: string[] = [
   `MATCH (r:Restaurant) WHERE r.id <> $rid DETACH DELETE r`,
   `MATCH (t:FoodTrend) WHERE NOT t.id IN $trendIds DETACH DELETE t`,
-  `MATCH (c:LocalCreator) WHERE coalesce(c.source, 'seed') <> 'treg'
+  `MATCH (c:LocalCreator) WHERE NOT coalesce(c.source, 'seed') IN ['treg', 'sample']
    OPTIONAL MATCH (c)-[:POSTED]->(p:Post)
    DETACH DELETE c, p`,
   `MATCH (c:Competitor) WHERE coalesce(c.source, 'seed') <> 'treg'
@@ -220,6 +221,8 @@ export interface RestaurantProfile {
   city: string;
   avgCheck: number;
   slowShifts: string[];
+  /** 'owner estimate', or where the data-backed slow shifts came from */
+  slowShiftsSource?: string;
   concept?: string;
   chef?: string;
   award?: string;
@@ -241,7 +244,8 @@ export async function getRestaurant(driver: Driver, rid = DEFAULT_RESTAURANT_ID)
     driver,
     `MATCH (r:Restaurant {id: $rid})-[:IN]->(n:Neighborhood)-[:IN_CITY]->(c:City)
      RETURN r.id AS id, r.name AS name, r.cuisine AS cuisine, n.name AS neighborhood,
-            c.name AS city, r.avg_check AS avgCheck, r.slow_shifts AS slowShifts,
+            c.name AS city, r.avg_check AS avgCheck, coalesce(r.slow_shifts_live, r.slow_shifts) AS slowShifts,
+            CASE WHEN r.slow_shifts_live IS NULL THEN 'owner estimate' ELSE r.slow_shifts_source END AS slowShiftsSource,
             r.concept AS concept, r.chef AS chef, r.award AS award, r.address AS address, r.website AS website,
             r.instagram AS instagram, r.hours AS hours, r.tasting_price AS tastingPrice, r.lat AS lat, r.lng AS lng,
             r.google_place_id AS googlePlaceId, r.instagram_location_id AS instagramLocationId,
@@ -263,13 +267,16 @@ RETURN t.id AS id, t.name AS name, t.stage AS stage, t.velocity_pct AS velocity,
        [(t)-[:FITS]->(c:Cuisine) | c.name] AS fits,
        EXISTS { (t)-[:FITS]->(:Cuisine)<-[:SERVES_CUISINE]-(r) } AS fitsUs,
        [(comp:Competitor)-[:CAPITALIZES_ON]->(t) WHERE EXISTS { (comp)-[:IN]->(:Neighborhood)<-[:IN]-(r) } | comp.name] AS rivalsOnIt,
-       COUNT { (t)-[:EVIDENCED_BY]->(:WebSource) } AS webSources
+       COUNT { (t)-[:EVIDENCED_BY]->(:WebSource) } AS webSources,
+       coalesce(t.illustrative, true) AS illustrative, t.search_series AS searchSeries, t.search_level AS searchLevel,
+       toString(t.signals_at) AS signalsAt, coalesce(t.signal_low_resolution, false) AS lowResolution,
+       [(t)-[:TRACKED_AS]->(h:Hashtag) | {tag: h.name, views: h.tiktok_views, videos: h.tiktok_videos}][0] AS tiktok
 ORDER BY velocity DESC`;
 
 export interface BoardTrend {
   id: string;
   name: string;
-  stage: "Emerging" | "Accelerating" | "Mainstream" | "Saturated";
+  stage: "Emerging" | "Accelerating" | "Mainstream" | "Saturated" | "Niche";
   velocity: number;
   format: string;
   hook: string;
@@ -281,6 +288,14 @@ export interface BoardTrend {
   fitsUs: boolean;
   rivalsOnIt: string[];
   webSources: number;
+  /** false once live Google Trends + TikTok signals replaced the placeholder stage/velocity */
+  illustrative: boolean;
+  searchSeries: number[] | null;
+  searchLevel: number | null;
+  signalsAt: string | null;
+  /** Google Trends range too small to read small changes reliably */
+  lowResolution: boolean;
+  tiktok: { tag: string; views: number | null; videos: number | null } | null;
 }
 
 export async function getTrendBoard(driver: Driver, rid = DEFAULT_RESTAURANT_ID): Promise<BoardTrend[]> {
@@ -359,6 +374,10 @@ RETURN c.handle AS handle, c.followers AS followers, c.engagement_rate AS engage
        EXISTS { (c)-[:COVERS]->(:Cuisine)<-[:SERVES_CUISINE]-(r) } AS cuisineFit,
        EXISTS { (c)-[:POSTED]->(:Post)-[:AT]->(r) } AS alreadyPostedAboutUs,
        coalesce(c.source, 'seed') AS source, c.sample_post_url AS samplePostUrl, toString(c.discovered_at) AS discoveredAt,
+       coalesce(c.status, 'active') AS status, c.discontinued_at AS discontinuedAt,
+       [(c)<-[:FOR]-(cp:Comp) WHERE cp.status = 'completed' |
+          {date: cp.date, value: cp.value_usd,
+           bookings: [(b:Booking)-[:ATTRIBUTED_TO]->(cp) | {date: b.date, revenue: b.revenue_usd}]}] AS completedComps,
        // Only accounts discovered live are real; demo seed creators have no profile link.
        CASE WHEN c.source = 'treg' THEN coalesce(c.profile_url, 'https://www.instagram.com/' + substring(c.handle, 1) + '/') END AS profileUrl`;
 
@@ -377,7 +396,7 @@ export interface VettedCreator {
   alreadyPostedAboutUs: boolean;
   geotagged: number;
   /** 'seed' = demo data; 'treg' = discovered live from Instagram through Treg */
-  source: "seed" | "treg";
+  source: "seed" | "treg" | "sample";
   /** 'audience' = % of followers who are local; 'posting' = % of geo-tagged posts in the city */
   localMetric: "audience" | "posting";
   samplePostUrl: string | null;
@@ -386,7 +405,69 @@ export interface VettedCreator {
   discoveredAt: string | null;
   passed: boolean;
   reasons: string[];
+  /** Overall 1–10 score (same as scorecard.overall) */
   score: number;
+  status: "active" | "discontinued";
+  discontinuedAt: string | null;
+  scorecard: Scorecard;
+}
+
+/** PM brief §5: three spaces scored 1–10; 6.5+ and a positive payback to continue. */
+export interface Scorecard {
+  local: number | null;
+  culinary: number;
+  roi: number | null;
+  overall: number;
+  /** tracked revenue ÷ comp value across completed comps */
+  returnRatio: number | null;
+  ttvDays: number | null;
+  compsCompleted: number;
+  leaks: number;
+  verdict: "continue" | "discontinue" | "review" | "ready-to-test" | "not-eligible" | "discontinued";
+}
+
+export const SCORE_THRESHOLD = 6.5;
+const clamp10 = (n: number) => Math.max(0, Math.min(10, Math.round(n * 10) / 10));
+const isoDays = (a: string, b: string) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86400000);
+
+function scoreCreator(c: any, eligible: boolean): Scorecard {
+  const prox: Record<string, number> = { home: 1, adjacent: 0.9, city: 0.7, outside: 0.3 };
+  const local = c.localPct === null || c.localPct === undefined ? null : clamp10((c.localPct / 10) * (prox[c.proximity] ?? 0.5));
+  const culinary = clamp10(3 + (c.cuisineFit ? 4 : 0) + (c.alreadyPostedAboutUs ? 3 : 0));
+
+  const today = new Date().toISOString().slice(0, 10);
+  let value = 0, tracked = 0, leaks = 0;
+  const ttvs: number[] = [];
+  for (const cp of (c.completedComps ?? []) as any[]) {
+    const after = (cp.bookings ?? []).filter((b: any) => isoDays(cp.date, b.date) >= 0);
+    const rev = after.reduce((s: number, b: any) => s + (b.revenue ?? 0), 0);
+    value += cp.value ?? 0;
+    tracked += rev;
+    if (after.length) ttvs.push(Math.min(...after.map((b: any) => isoDays(cp.date, b.date))));
+    if (isoDays(cp.date, today) >= 7 && cp.value > 0 && rev / cp.value < 0.1) leaks += 1;
+  }
+  const completed = (c.completedComps ?? []).length;
+  const returnRatio = completed && value > 0 ? Math.round((tracked / value) * 100) / 100 : null;
+  const ttvDays = ttvs.length ? Math.min(...ttvs) : null;
+  let roi: number | null = null;
+  if (returnRatio !== null) {
+    roi = returnRatio * 5 + (ttvDays !== null && ttvDays <= 5 ? 1 : ttvDays === null || ttvDays > 14 ? -1 : 0);
+    roi = clamp10(roi);
+  }
+
+  const parts: [number | null, number][] = [[local, 0.35], [culinary, 0.25], [roi, 0.4]];
+  const used = parts.filter(([v]) => v !== null) as [number, number][];
+  const weight = used.reduce((s, [, w]) => s + w, 0);
+  const overall = clamp10(weight ? used.reduce((s, [v, w]) => s + v * w, 0) / weight : 0);
+
+  let verdict: Scorecard["verdict"];
+  if (c.status === "discontinued") verdict = "discontinued";
+  else if (returnRatio === null) verdict = eligible ? "ready-to-test" : "not-eligible";
+  else if (overall >= SCORE_THRESHOLD && returnRatio >= 1 && leaks === 0) verdict = "continue";
+  else if (leaks > 0 || returnRatio < 0.5) verdict = "discontinue";
+  else verdict = "review";
+
+  return { local, culinary, roi, overall, returnRatio, ttvDays, compsCompleted: completed, leaks, verdict };
 }
 
 /** Nano + micro creators: big enough to be seen, small enough that their audience is real and local. */
@@ -408,11 +489,10 @@ export async function getCreatorVetting(driver: Driver, rid = DEFAULT_RESTAURANT
       if (c.engagement === null || c.engagement === undefined) reasons.push("Engagement unknown");
       if (c.proximity === "outside") reasons.push("Posts mostly outside the city");
       if (c.rival && c.rivalDaysAgo !== null && c.rivalDaysAgo <= 60) reasons.push(`Paid post for ${c.rival} ${c.rivalDaysAgo} days ago`);
-      // City-wide creators still reach diners a subway ride away, but rank below true locals.
-      const reach = c.proximity === "city" ? 0.6 : 1;
-      const fit = c.cuisineFit ? 1.15 : 1;
-      const score = reasons.length === 0 ? Math.round(c.localPct * c.engagement * reach * fit) / 10 : 0;
-      return { ...c, passed: reasons.length === 0, reasons, score };
+      if (c.status === "discontinued") reasons.push(`Discontinued${c.discontinuedAt ? ` on ${c.discontinuedAt}` : ""}`);
+      const scorecard = scoreCreator(c, reasons.length === 0);
+      const { completedComps, ...rest } = c;
+      return { ...rest, passed: reasons.length === 0, reasons, score: scorecard.overall, scorecard };
     })
     .sort((a: VettedCreator, b: VettedCreator) => Number(b.passed) - Number(a.passed) || b.score - a.score);
 }
@@ -531,7 +611,7 @@ export async function getGraphView(driver: Driver, rid = DEFAULT_RESTAURANT_ID) 
 
 export interface Insight {
   id: string;
-  kind: "conquest" | "warm-lead" | "pantry-trend" | "rival-gap" | "open-trend" | "cuisine-fit";
+  kind: "conquest" | "warm-lead" | "pantry-trend" | "rival-gap" | "open-trend" | "cuisine-fit" | "overflow" | "trend-creator";
   title: string;
   detail: string;
   hops: number;
@@ -589,6 +669,23 @@ WHERE t.stage IN ['Emerging', 'Accelerating']
 RETURN t.name AS trend, cu.name AS cuisine, t.velocity_pct AS velocity, ${PATH_IDS}
 ORDER BY velocity DESC
 LIMIT 6`,
+  overflow: `
+// Dinner slots where a nearby rival is packed and we are quiet (Google Maps popular times)
+MATCH (r:Restaurant {id: $rid})-[a:BUSY]->(t:TimeSlot)<-[b:BUSY]-(comp:Competitor)
+WHERE t.hour >= 17 AND t.hour <= 21 AND b.score >= 70 AND b.score - a.score >= 25
+RETURN comp.name AS rival, t.day AS day, t.hour AS hour, a.score AS ours, b.score AS theirs,
+       [elementId(r), elementId(t), elementId(comp)] AS nodeIds, [elementId(a), elementId(b)] AS relIds
+ORDER BY b.score - a.score DESC
+LIMIT 3`,
+  "trend-creator": `
+// Creators whose posts already name a tracked trend (caption text or its hashtag)
+MATCH path = (c:LocalCreator)-[:POSTED]->(p:Post)-[:MENTIONS_TREND]->(t:FoodTrend)
+WHERE NOT coalesce(p.sponsored, false)
+WITH c, t, p, path ORDER BY p.posted_at DESC
+WITH c, t, collect(path)[0] AS path, count(p) AS posts
+RETURN c.handle AS creator, t.name AS trend, t.stage AS stage, posts, c.followers AS followers, ${PATH_IDS}
+ORDER BY posts DESC, followers DESC
+LIMIT 4`,
   "cuisine-fit": `
 // Creators who already cover what we cook
 MATCH path = (c:LocalCreator)-[:COVERS]->(cu:Cuisine)<-[:SERVES_CUISINE]-(r:Restaurant {id: $rid})
@@ -605,8 +702,9 @@ export async function getInsights(driver: Driver, rid = DEFAULT_RESTAURANT_ID): 
   await ensureHospitalitySeed(driver, rid);
   const run = (kind: Insight["kind"]) =>
     runCypher(driver, INSIGHT_CYPHER[kind], { rid, minFollowers: MIN_FOLLOWERS, maxFollowers: MAX_FOLLOWERS });
-  const [conquest, warm, pantry, gaps, open, fit] = await Promise.all([
+  const [conquest, warm, pantry, gaps, open, fit, overflow, trendCreators] = await Promise.all([
     run("conquest"), run("warm-lead"), run("pantry-trend"), run("rival-gap"), run("open-trend"), run("cuisine-fit"),
+    run("overflow"), run("trend-creator"),
   ]);
   const uniq = (a: string[]) => Array.from(new Set(a));
   const make = (kind: Insight["kind"], i: number, row: any, title: string, detail: string): Insight => ({
@@ -657,6 +755,15 @@ export async function getInsights(driver: Driver, rid = DEFAULT_RESTAURANT_ID): 
     ...group(open, (r) => r.trend).map((r: any, i: number) =>
       make("open-trend", i, r, `Open lane: ${r.trend}`,
         `Fits your ${and(r.cuisines)} menu (+${r.velocity}%) and no tracked rival nearby is on it.`)),
+    ...overflow.map((r: any, i: number) => {
+      const day = `${String(r.day)[0].toUpperCase()}${String(r.day).slice(1)}`;
+      const hour = `${r.hour > 12 ? r.hour - 12 : r.hour} PM`;
+      return make("overflow", i, r, `Overflow night: ${day} ${hour}`,
+        `The block is busy: ${r.rival} runs at ${r.theirs}% while you're at ${r.ours}% (Google Maps popular times). Catch that walk-in demand with a ${day} post or a walk-in offer.`);
+    }),
+    ...trendCreators.map((r: any, i: number) =>
+      make("trend-creator", i, r, `${r.creator} already posts about ${r.trend}`,
+        `${Number(r.posts) === 1 ? "A recent post names" : `${Number(r.posts)} recent posts name`} ${r.trend}${r.stage ? ` (${String(r.stage).toLowerCase()} on Google Trends)` : ""}. A natural fit for a comp built around the dish that carries it.`)),
     ...fit.map((r: any, i: number) =>
       make("cuisine-fit", i, r, `Cuisine match: ${r.creator}`,
         `Covers ${r.cuisines.join(" and ")}, the same food you serve.`)),

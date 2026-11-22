@@ -12,6 +12,9 @@ import { getRestaurant, ensureHospitalitySeed, DEFAULT_RESTAURANT_ID } from "./h
  * 4. MERGE them into Neo4j as LocalCreator nodes, so Creator Scout and Chef Pepper vet them
  *    with the same rules as every other creator.
  *
+ * Conquest mode instead reads recent posts tagged at each rival's Instagram location (resolved once
+ * from the rival's Google Maps pin), so the graph learns who just ate at a competitor.
+ *
  * Instagram does not expose audience location publicly, so "local %" for live creators is the
  * share of their geo-tagged posts that are in the city (stored as local_metric = 'posting').
  */
@@ -25,6 +28,9 @@ const TOOLS = {
 export const SCAN_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 const MAX_CANDIDATES = 8;
 const LOCATION_POSTS = "tikhub.x.instagram-v1-fetch-location-posts";
+const LOCATIONS_NEAR = "tikhub.x.instagram-v2-search-by-coordinates";
+/** An Instagram location counts as the rival when its name matches and it sits within this distance of the Maps pin. */
+const LOCATION_MATCH_KM = 0.2;
 // Cuisines a creator covers, inferred from their captions
 const CUISINE_PATTERNS: Record<string, RegExp> = {
   Korean: /korean|k-?food|kbbq|bibimbap|kimchi|bulgogi|soju|tteok|banchan|gochujang/i,
@@ -32,7 +38,7 @@ const CUISINE_PATTERNS: Record<string, RegExp> = {
   Japanese: /japanese|sushi|omakase|ramen|izakaya|yakitori/i,
   Italian: /italian|pasta|pizza|trattoria/i,
 };
-const norm = (s: string) => s.toLowerCase().replace(/[’'`]/g, "");
+const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[’'`]/g, "");
 // Instagram location tags often carry coordinates but no city text; within this radius counts as local.
 const LOCAL_RADIUS_KM = 25;
 function kmBetween(lat1: number, lng1: number, lat2: number, lng2: number) {
@@ -40,7 +46,7 @@ function kmBetween(lat1: number, lng1: number, lat2: number, lng2: number) {
   const a = Math.sin(toRad(lat2 - lat1) / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(toRad(lng2 - lng1) / 2) ** 2;
   return 2 * 6371 * Math.asin(Math.sqrt(a));
 }
-const BUSINESS_CATEGORY = /restaurant|caf[eé]|coffee|bakery|\bbar\b|pub|pizza|food & beverage|grocery|shopping|retail|hotel|deli|brewery|winery|catering|local business|dessert shop/i;
+const BUSINESS_CATEGORY = /restaurant|caf[eé]|coffee|bakery|\bbar\b|pub|pizza|food & beverage|grocery|shopping|retail|hotel|deli|brewery|winery|catering|local business|dessert shop|apartment|condo|real estate|building|food hall|market/i;
 const CITY_PATTERN = /new york|manhattan|brooklyn|queens|bronx|staten island|\bnyc\b/i;
 // Restaurants often leave the Instagram category blank; their bios give them away.
 const BUSINESS_BIO =
@@ -63,6 +69,7 @@ export interface DiscoveredCreator {
 }
 
 export interface ScanResult {
+  mode: "home" | "conquest";
   skipped: boolean;
   lastScanAt: string | null;
   nextScanAt: string | null;
@@ -72,13 +79,18 @@ export interface ScanResult {
   businessesSkipped: { handle: string; category: string }[];
   failures: string[];
   costUsd: number;
+  /** Conquest mode: rivals whose location posts were read, and known creators linked to a rival for free */
+  rivalsScanned?: { rival: string; locationId: string | null; posts: number }[];
+  knownLinked?: number;
 }
 
-export async function getLastScan(driver: Driver, rid = DEFAULT_RESTAURANT_ID) {
+export async function getLastScan(driver: Driver, rid = DEFAULT_RESTAURANT_ID, mode: "home" | "conquest" = "home") {
   const session = driver.session();
   try {
     const res = await session.run(
-      `MATCH (r:Restaurant {id: $rid}) RETURN toString(r.last_creator_scan_at) AS at, r.last_creator_scan_cost AS cost`,
+      mode === "conquest"
+        ? `MATCH (r:Restaurant {id: $rid}) RETURN toString(r.last_conquest_scan_at) AS at, r.last_conquest_scan_cost AS cost`
+        : `MATCH (r:Restaurant {id: $rid}) RETURN toString(r.last_creator_scan_at) AS at, r.last_creator_scan_cost AS cost`,
       { rid }
     );
     const at = res.records[0]?.get("at") as string | null;
@@ -88,17 +100,22 @@ export async function getLastScan(driver: Driver, rid = DEFAULT_RESTAURANT_ID) {
   }
 }
 
-export async function discoverCreators(driver: Driver, opts: { rid?: string; force?: boolean } = {}): Promise<ScanResult> {
+export async function discoverCreators(
+  driver: Driver,
+  opts: { rid?: string; force?: boolean; mode?: "home" | "conquest" } = {}
+): Promise<ScanResult> {
   const rid = opts.rid ?? DEFAULT_RESTAURANT_ID;
+  const mode = opts.mode ?? "home";
   await ensureHospitalitySeed(driver, rid);
   const restaurant = await getRestaurant(driver, rid);
   const slug = restaurant.neighborhood.toLowerCase().replace(/[^a-z]/g, "");
   const citySlug = restaurant.city === "New York" ? "nyc" : restaurant.city.toLowerCase().replace(/[^a-z]/g, "");
-  const hashtags = [`${slug}food`, `${slug}eats`, restaurant.instagram ? restaurant.instagram : `${citySlug}foodie`];
+  const hashtags = mode === "conquest" ? [] : [`${slug}food`, `${slug}eats`, restaurant.instagram ? restaurant.instagram : `${citySlug}foodie`];
 
-  const last = await getLastScan(driver, rid);
+  const last = await getLastScan(driver, rid, mode);
   if (!opts.force && last.at && Date.now() - new Date(last.at).getTime() < SCAN_COOLDOWN_MS) {
     return {
+      mode,
       skipped: true,
       lastScanAt: last.at,
       nextScanAt: new Date(new Date(last.at).getTime() + SCAN_COOLDOWN_MS).toISOString(),
@@ -126,23 +143,43 @@ export async function discoverCreators(driver: Driver, opts: { rid?: string; for
     } else failures.push(`#${hashtags[i]}: ${r.reason?.message ?? r.reason}`);
   });
 
-  // Posts tagged at the restaurant itself: these people already came in.
-  const warmPosts: any[] = [];
-  if (restaurant.instagramLocationId) {
+  // Posts tagged at a venue: the restaurant itself (these people already came in), or in conquest
+  // mode each rival (these people just ate at a competitor).
+  const warmPosts: { post: any; venueId: string }[] = [];
+  const rivalsScanned: { rival: string; locationId: string | null; posts: number }[] = [];
+  if (mode === "conquest") {
+    const rivals = await resolveRivalLocations(driver, rid, (c) => (costMicro += c), failures);
+    await Promise.all(
+      rivals.map(async (rv) => {
+        if (!rv.locationId) return rivalsScanned.push({ rival: rv.name, locationId: null, posts: 0 });
+        try {
+          const res = await tregCall(LOCATION_POSTS, { location_id: rv.locationId, tab: "recent" });
+          costMicro += res.costMicro;
+          const edges: any[] = res.data?.data?.edges ?? [];
+          for (const e of edges) warmPosts.push({ post: e.node ?? e, venueId: rv.id });
+          rivalsScanned.push({ rival: rv.name, locationId: rv.locationId, posts: edges.length });
+        } catch (e: any) {
+          failures.push(`${rv.name} location posts: ${e?.message ?? e}`);
+          rivalsScanned.push({ rival: rv.name, locationId: rv.locationId, posts: 0 });
+        }
+      })
+    );
+  } else if (restaurant.instagramLocationId) {
     const locResults = await Promise.allSettled(
       ["recent", "ranked"].map((tab) => tregCall(LOCATION_POSTS, { location_id: restaurant.instagramLocationId!, tab }))
     );
     locResults.forEach((r, i) => {
       if (r.status === "fulfilled") {
         costMicro += r.value.costMicro;
-        for (const e of r.value.data?.data?.edges ?? []) warmPosts.push(e.node ?? e);
+        for (const e of r.value.data?.data?.edges ?? []) warmPosts.push({ post: e.node ?? e, venueId: restaurant.id });
       } else failures.push(`location posts (${i === 0 ? "recent" : "top"}): ${r.reason?.message ?? r.reason}`);
     });
   }
 
   // Rank posters: people who posted from the restaurant first, then by how often they show up, then likes.
-  const byUser = new Map<string, { count: number; likes: number; url: string | null; warmPost: any | null }>();
-  const bump = (username: string | undefined, likes: number, url: string | null, warmPost: any | null) => {
+  type Warm = { post: any; venueId: string };
+  const byUser = new Map<string, { count: number; likes: number; url: string | null; warmPost: Warm | null }>();
+  const bump = (username: string | undefined, likes: number, url: string | null, warmPost: Warm | null) => {
     if (!username || username.toLowerCase() === (restaurant.instagram ?? "").toLowerCase()) return;
     const prev = byUser.get(username) ?? { count: 0, likes: 0, url: null, warmPost: null };
     byUser.set(username, { count: prev.count + 1, likes: prev.likes + likes, url: prev.url ?? url, warmPost: prev.warmPost ?? warmPost });
@@ -150,13 +187,18 @@ export async function discoverCreators(driver: Driver, opts: { rid?: string; for
   for (const p of posts) {
     bump(p?.owner?.username, Number(p.like_count) || 0, p.url ?? (p.shortcode ? `https://www.instagram.com/p/${p.shortcode}/` : null), null);
   }
-  for (const p of warmPosts) {
-    bump(p?.user?.username, Number(p.like_count) || 0, p.code ? `https://www.instagram.com/p/${p.code}/` : null, p);
+  for (const w of warmPosts) {
+    const p = w.post;
+    bump(p?.user?.username, Number(p.like_count) || 0, p.code ? `https://www.instagram.com/p/${p.code}/` : null, w);
   }
+  // Creators already in the graph who posted from a venue: link that post for free, no lookups.
+  const known = await listKnownCreators(driver);
+  const knownWarm = warmPosts.filter((w) => known.has(String(w.post?.user?.username ?? "").toLowerCase()));
+  const knownLinked = await linkKnownCreatorPosts(driver, knownWarm);
   // Spend lookups on new accounts: skip anyone scanned (or flagged as a business) in the last week.
   const recentlySeen = await listRecentlyScanned(driver);
   const candidates = Array.from(byUser.entries())
-    .filter(([username]) => !recentlySeen.has(username.toLowerCase()))
+    .filter(([username]) => !recentlySeen.has(username.toLowerCase()) && !known.has(username.toLowerCase()))
     .sort((a, b) => Number(!!b[1].warmPost) - Number(!!a[1].warmPost) || b[1].count - a[1].count || b[1].likes - a[1].likes)
     .slice(0, MAX_CANDIDATES);
 
@@ -243,18 +285,19 @@ export async function discoverCreators(driver: Driver, opts: { rid?: string; for
             };
         };
         const rows = items.slice(0, 12).map(toRow);
-        // The post that brought them in from the restaurant's location tag is always linked to the restaurant.
+        // The post that brought them in from a venue's location tag is always linked to that venue.
         if (seen.warmPost) {
-          const warm = toRow(seen.warmPost);
-          warm.venueId = restaurant.id;
+          const venueId = seen.warmPost.venueId;
+          const warm = toRow(seen.warmPost.post);
+          warm.venueId = venueId;
           warm.place = null;
           const i = rows.findIndex((r) => r.id === warm.id);
-          if (i >= 0) rows[i] = { ...rows[i], venueId: restaurant.id, place: null };
+          if (i >= 0) rows[i] = { ...rows[i], venueId, place: null };
           else rows.push(warm);
         }
         postsByCreator.set(`ig-${username}`, rows);
 
-        const captions = [...items, ...(seen.warmPost ? [seen.warmPost] : [])]
+        const captions = [...items, ...(seen.warmPost ? [seen.warmPost.post] : [])]
           .map((it) => (typeof it.caption === "string" ? it.caption : it.caption?.text ?? ""))
           .join(" ");
         const covers = Object.entries(CUISINE_PATTERNS)
@@ -263,7 +306,7 @@ export async function discoverCreators(driver: Driver, opts: { rid?: string; for
 
         added.push({
           covers,
-          postedFromUs: Boolean(seen.warmPost),
+          postedFromUs: seen.warmPost?.venueId === restaurant.id,
           handle: `@${username}`,
           followers,
           engagement,
@@ -348,7 +391,9 @@ export async function discoverCreators(driver: Driver, opts: { rid?: string; for
         );
       }
       await tx.run(
-        `MATCH (r:Restaurant {id: $rid}) SET r.last_creator_scan_at = datetime(), r.last_creator_scan_cost = $cost`,
+        mode === "conquest"
+          ? `MATCH (r:Restaurant {id: $rid}) SET r.last_conquest_scan_at = datetime(), r.last_conquest_scan_cost = $cost`
+          : `MATCH (r:Restaurant {id: $rid}) SET r.last_creator_scan_at = datetime(), r.last_creator_scan_cost = $cost`,
         { rid, cost: costMicro / 1e6 }
       );
     });
@@ -357,6 +402,7 @@ export async function discoverCreators(driver: Driver, opts: { rid?: string; for
   }
 
   return {
+    mode,
     skipped: false,
     lastScanAt: new Date().toISOString(),
     nextScanAt: new Date(Date.now() + SCAN_COOLDOWN_MS).toISOString(),
@@ -366,7 +412,116 @@ export async function discoverCreators(driver: Driver, opts: { rid?: string; for
     businessesSkipped,
     failures,
     costUsd: Math.round(costMicro) / 1e6,
+    ...(mode === "conquest" ? { rivalsScanned, knownLinked } : {}),
   };
+}
+
+/**
+ * Each rival's Instagram location id. Resolved once from the rival's Google Maps pin (a nearby-places
+ * search), matched by name and distance, then stored on the Competitor so later scans skip the lookup.
+ */
+async function resolveRivalLocations(
+  driver: Driver,
+  rid: string,
+  addCost: (micro: number) => void,
+  failures: string[]
+): Promise<{ id: string; name: string; locationId: string | null }[]> {
+  const session = driver.session();
+  try {
+    const res = await session.run(
+      `MATCH (:Restaurant {id: $rid})-[:IN]->(home:Neighborhood)<-[:IN]-(c:Competitor)
+       RETURN c.id AS id, c.name AS name, c.lat AS lat, c.lng AS lng, c.instagram_location_id AS locationId`,
+      { rid }
+    );
+    const rivals = res.records.map((r) => r.toObject() as { id: string; name: string; lat: number | null; lng: number | null; locationId: string | null });
+    return await Promise.all(
+      rivals.map(async (rv) => {
+        if (rv.locationId || rv.lat == null || rv.lng == null) return { id: rv.id, name: rv.name, locationId: rv.locationId ?? null };
+        try {
+          const near = await tregCall(LOCATIONS_NEAR, { latitude: String(rv.lat), longitude: String(rv.lng) });
+          addCost(near.costMicro);
+          const items: any[] = near.data?.data?.data?.items ?? near.data?.data?.items ?? [];
+          const target = norm(rv.name).replace(/[^a-z0-9]+/g, " ").trim();
+          const match = items.find((it) => {
+            const name = norm(String(it.name ?? "")).replace(/[^a-z0-9]+/g, " ").trim();
+            const close = kmBetween(rv.lat!, rv.lng!, Number(it.latitude), Number(it.longitude)) <= LOCATION_MATCH_KM;
+            return close && name && (name === target || name.startsWith(`${target} `) || target.startsWith(`${name} `));
+          });
+          if (!match) return { id: rv.id, name: rv.name, locationId: null };
+          const locationId = String(match.id);
+          const w = driver.session();
+          try {
+            await w.run(
+              `MATCH (c:Competitor {id: $id}) SET c.instagram_location_id = $locationId, c.instagram_location_name = $name`,
+              { id: rv.id, locationId, name: String(match.name) }
+            );
+          } finally {
+            await w.close();
+          }
+          return { id: rv.id, name: rv.name, locationId };
+        } catch (e: any) {
+          failures.push(`${rv.name} location lookup: ${e?.message ?? e}`);
+          return { id: rv.id, name: rv.name, locationId: null };
+        }
+      })
+    );
+  } finally {
+    await session.close();
+  }
+}
+
+async function listKnownCreators(driver: Driver): Promise<Set<string>> {
+  const session = driver.session();
+  try {
+    const res = await session.run(`MATCH (c:LocalCreator) WHERE c.source = 'treg' RETURN collect(toLower(substring(c.handle, 1))) AS handles`);
+    return new Set((res.records[0]?.get("handles") as string[]) ?? []);
+  } finally {
+    await session.close();
+  }
+}
+
+/** Write venue-tagged posts by creators already in the graph: (creator)-[:POSTED]->(post)-[:AT]->(venue). */
+async function linkKnownCreatorPosts(driver: Driver, warm: { post: any; venueId: string }[]): Promise<number> {
+  const rows = warm
+    .map(({ post: p, venueId }) => {
+      const code = p.code ?? p.shortcode ?? (p.pk ? String(p.pk) : null);
+      const username = String(p?.user?.username ?? "").toLowerCase();
+      if (!code || !username) return null;
+      const caption = typeof p.caption === "string" ? p.caption : p.caption?.text ?? "";
+      return {
+        creatorId: `ig-${username}`,
+        id: `ig-post-${code}`,
+        venueId,
+        takenAt: typeof p.taken_at === "number" ? p.taken_at : null,
+        sponsored: Boolean(p.is_paid_partnership),
+        likes: typeof p.like_count === "number" ? p.like_count : null,
+        comments: typeof p.comment_count === "number" ? p.comment_count : null,
+        caption: caption.slice(0, 200),
+        url: `https://www.instagram.com/p/${code}/`,
+      };
+    })
+    .filter(Boolean);
+  if (!rows.length) return 0;
+  const session = driver.session();
+  try {
+    await session.executeWrite((tx) =>
+      tx.run(
+        `UNWIND $rows AS p
+         MATCH (c:LocalCreator) WHERE toLower(c.id) = p.creatorId
+         MATCH (v:Place {id: p.venueId})
+         MERGE (post:Post {id: p.id})
+         SET post.posted_at = CASE WHEN p.takenAt IS NULL THEN NULL ELSE datetime({epochSeconds: toInteger(p.takenAt)}) END,
+             post.sponsored = p.sponsored, post.likes = p.likes, post.comments = p.comments,
+             post.caption = p.caption, post.url = p.url, post.source = 'treg'
+         MERGE (c)-[:POSTED]->(post)
+         MERGE (post)-[:AT]->(v)`,
+        { rows }
+      )
+    );
+  } finally {
+    await session.close();
+  }
+  return rows.length;
 }
 
 async function listRecentlyScanned(driver: Driver): Promise<Set<string>> {

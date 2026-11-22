@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Users, CheckCircle2, XCircle, Copy, Check, MapPin, Radar, ExternalLink } from "lucide-react";
+import { Users, CheckCircle2, XCircle, MapPin, Radar, ExternalLink } from "lucide-react";
+import { CreatorCheckPanel } from "./CreatorCheckPanel";
+import { CompPlanner } from "./CompPlanner";
+import { ScoreBadge, VerdictChip } from "./scorecard";
 import type { RestaurantProfile, VettedCreator } from "@/types";
 import { CypherTrace, TrackHeader, ErrorNote, getJson, Skeleton, FreshnessLine } from "./ui";
 import type { Freshness } from "./ui";
@@ -57,8 +60,8 @@ const Handle: React.FC<{ c: VettedCreator; className?: string }> = ({ c, classNa
   ) : (
     <span className={className}>
       {c.handle}{" "}
-      <span className="text-[9px] uppercase px-1 py-0.5 rounded bg-neutral-800 text-neutral-400 align-middle" title="Made-up seed data, not a real account">
-        Demo
+      <span className="text-[9px] uppercase px-1 py-0.5 rounded bg-amber-500/15 text-amber-300 align-middle" title="Fictional sample creator for demos, not a real account">
+        {c.source === "sample" ? "Sample" : "Demo"}
       </span>
     </span>
   );
@@ -75,20 +78,10 @@ const proximityText: Record<VettedCreator["proximity"], string> = {
 
 const k = (n: number) => (n >= 10000 ? `${Math.round(n / 1000)}k` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
-function inviteText(c: VettedCreator, r: RestaurantProfile, dish: string | null, shift: string) {
-  const name = c.handle.replace(/^@/, "");
-  const intro = c.alreadyPostedAboutUs
-    ? `Hey ${name}! This is the team at ${r.name}. We saw your post from your dinner with us and loved it, thank you.`
-    : `Hey ${name}! We're ${r.name}, ${/^[aeiou]/i.test(r.cuisine) ? "an" : "a"} ${r.cuisine} restaurant in ${r.neighborhood}${r.award ? ` (${r.award})` : ""}. Your food posts around ${r.city} caught our eye.`;
-  return `${intro} We'd love to host you and a guest for a comped tasting${dish ? ` featuring our ${dish}` : ""} on ${shift}. No posting required; if you love it, we'd be thrilled if you shared it. Which night works?`;
-}
-
 export const TrackCreatorScout: React.FC = () => {
   const [data, setData] = useState<CreatorsData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<VettedCreator | null>(null);
-  const [shift, setShift] = useState<string>("");
-  const [copied, setCopied] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -97,8 +90,12 @@ export const TrackCreatorScout: React.FC = () => {
     getJson<CreatorsData>("/api/creators")
       .then((d) => {
         setData(d);
-        if (!keepSelection) setSelected(d.creators.find((c) => c.passed) ?? d.creators.find((c) => c.alreadyPostedAboutUs) ?? null);
-        setShift((s) => s || d.restaurant.slowShifts[0] || "a weeknight");
+        // Keep the same creator selected, with fresh data (status, scorecard) after a change
+        setSelected((prev) =>
+          keepSelection && prev
+            ? d.creators.find((c) => c.handle === prev.handle) ?? null
+            : d.creators.find((c) => c.passed) ?? d.creators.find((c) => c.alreadyPostedAboutUs) ?? null
+        );
       })
       .catch((e) => setError(e.message));
 
@@ -124,7 +121,6 @@ export const TrackCreatorScout: React.FC = () => {
 
   const passed = data?.creators.filter((c) => c.passed) ?? [];
   const rejected = data?.creators.filter((c) => !c.passed) ?? [];
-  const invite = selected && data ? inviteText(selected, data.restaurant, data.featuredDish, shift) : "";
 
   return (
     <div className="space-y-6">
@@ -144,6 +140,7 @@ export const TrackCreatorScout: React.FC = () => {
       {error && <ErrorNote message={error} />}
       {!data && !error && <Skeleton label="Vetting creators from the graph…" cards={4} />}
       {data && <FreshnessLine items={data.freshness} />}
+      {data && <CreatorCheckPanel onChecked={() => load(true)} />}
 
       {data && (
         <div className="p-3.5 rounded-xl border border-fuchsia-500/30 bg-fuchsia-950/10 flex flex-col sm:flex-row sm:items-center gap-3">
@@ -226,7 +223,10 @@ export const TrackCreatorScout: React.FC = () => {
                       </span>
                     )}
                   </span>
-                  <span className="text-[11px] font-mono text-emerald-300">score {c.score}</span>
+                  <span className="flex items-center gap-2">
+                    <VerdictChip verdict={c.scorecard.verdict} />
+                    <ScoreBadge s={c.scorecard} />
+                  </span>
                 </div>
                 <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-neutral-400">
                   <span>{k(c.followers)} followers</span>
@@ -269,8 +269,9 @@ export const TrackCreatorScout: React.FC = () => {
                     )}
                     {c.source === "treg" && <LiveBadge />}
                   </span>
-                  <span className="text-[11px] text-neutral-500">
+                  <span className="flex items-center gap-2 text-[11px] text-neutral-500">
                     {k(c.followers)} · {localText(c)}
+                    <ScoreBadge s={c.scorecard} />
                   </span>
                 </div>
                 <ul className="mt-1 text-[11px] text-rose-300/80 list-disc list-inside">
@@ -284,41 +285,7 @@ export const TrackCreatorScout: React.FC = () => {
 
           <div className="lg:col-span-5">
             {selected ? (
-              <div className="p-4 rounded-xl border border-neutral-800 bg-neutral-900/40 space-y-3 lg:sticky lg:top-32">
-                <h3 className="text-sm font-bold text-white">
-                  VIP tasting invite for <Handle c={selected} />
-                </h3>
-                <label className="block text-[11px] text-neutral-400">
-                  Slow shift to fill
-                  <select
-                    value={shift}
-                    onChange={(e) => setShift(e.target.value)}
-                    className="mt-1 w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1.5 text-xs text-white"
-                  >
-                    {data.restaurant.slowShifts.map((s) => (
-                      <option key={s}>{s}</option>
-                    ))}
-                  </select>
-                </label>
-                <p className="text-xs text-neutral-200 leading-relaxed p-3 rounded-lg bg-neutral-950/60 border border-neutral-800">
-                  {invite}
-                </p>
-                <button
-                  onClick={() => {
-                    navigator.clipboard?.writeText(invite);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 1500);
-                  }}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-emerald-500 text-black font-semibold hover:bg-emerald-400 flex items-center gap-1.5"
-                >
-                  {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />} {copied ? "Copied" : "Copy invite"}
-                </button>
-                <p className="text-[10px] text-neutral-500">
-                  {selected.source === "treg"
-                    ? "Found live on Instagram through Treg. Instagram doesn't publish audience location, so local reach is measured by where they post."
-                    : "Demo creator from the seed graph. Run a live scan to add real creators."}
-                </p>
-              </div>
+              <CompPlanner creator={selected} restaurant={data.restaurant} featuredDish={data.featuredDish} onChanged={() => load(true)} />
             ) : (
               <div className="text-xs text-neutral-500">Select a creator to draft an invite.</div>
             )}

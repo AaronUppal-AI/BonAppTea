@@ -44,6 +44,8 @@ const KIND_TILE: Record<Insight["kind"], { kicker: string; tone: Tile["tone"]; g
   "rival-gap": { kicker: "Rival weak spot", tone: "pink", glyph: "◎", track: "intel-desk", action: "Open in Intel Desk" },
   "open-trend": { kicker: "Open lane", tone: "lilac", glyph: "↗", track: "trend-radar", action: "Open in Trend Radar" },
   "cuisine-fit": { kicker: "Cuisine match", tone: "mint", glyph: "◈", track: "creator-scout", action: "Open in Creator Scout" },
+  overflow: { kicker: "Overflow night", tone: "ice", glyph: "◷", track: "dish-to-post", action: "Plan a post for that night" },
+  "trend-creator": { kicker: "Trend creator", tone: "lilac", glyph: "#", track: "creator-scout", action: "Open in Creator Scout" },
 };
 
 interface HomeData {

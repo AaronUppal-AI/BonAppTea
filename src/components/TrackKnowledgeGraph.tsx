@@ -13,6 +13,8 @@ const KIND: Record<Insight["kind"], { label: string; style: string }> = {
   "rival-gap": { label: "Rival gap", style: "bg-rose-500/15 text-rose-300 border-rose-500/30" },
   "open-trend": { label: "Open lane", style: "bg-yellow-500/15 text-yellow-300 border-yellow-500/30" },
   "cuisine-fit": { label: "Cuisine fit", style: "bg-lime-500/15 text-lime-300 border-lime-500/30" },
+  overflow: { label: "Overflow night", style: "bg-sky-500/15 text-sky-300 border-sky-500/30" },
+  "trend-creator": { label: "Trend creator", style: "bg-purple-500/15 text-purple-300 border-purple-500/30" },
 };
 
 interface InsightsData {

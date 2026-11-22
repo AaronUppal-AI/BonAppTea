@@ -3,8 +3,9 @@
  *
  * Restaurant facts and the menu come from https://www.kochinyc.com/ (home, /menu, /the-team),
  * read 2026-11-22. Rivals, their reviews and creators are NOT seeded: the pipeline pulls them live
- * through Treg (Google Maps + Instagram). Trend stages, velocity and weekly-revenue figures are
- * illustrative demo values; the pipeline checks each trend against live You.com coverage.
+ * through Treg (Google Maps + Instagram). Trend stage and velocity start as placeholders and are replaced
+ * by live Google Trends + TikTok signals (Treg) when the enrichment pipeline runs; weekly-revenue upside
+ * stays an illustrative estimate.
  */
 
 export const KOCHI = {
@@ -76,35 +77,35 @@ export const KOCHI = {
   ],
   trends: [
     {
-      id: "ft-bibimbap-mix", name: "Tableside Bibimbap Mix", stage: "Accelerating", velocity_pct: 230,
+      id: "ft-bibimbap-mix", name: "Tableside Bibimbap Mix", keyword: "bibimbap", hashtag: "bibimbap", stage: "Accelerating", velocity_pct: 230,
       visual_format: "one slow tableside mix of the bibimbap", hook: "Sensory ASMR",
       audio: "rice scrape and sizzle sound", est_weekly_revenue: 1500,
       requires: ["rice", "seaweed", "kimchi"], fits: ["Korean"],
     },
     {
-      id: "ft-black-sesame", name: "Black Sesame Desserts", stage: "Accelerating", velocity_pct: 260,
+      id: "ft-black-sesame", name: "Black Sesame Desserts", keyword: "black sesame", hashtag: "blacksesame", stage: "Accelerating", velocity_pct: 260,
       visual_format: "spoon cracking through black sesame ice cream", hook: "Sensory ASMR",
       audio: "soft crunch close-up sound", est_weekly_revenue: 1200,
       requires: ["black sesame", "milk"], fits: ["Desserts", "Korean"],
     },
     {
-      id: "ft-perilla", name: "Perilla Leaf Everything", stage: "Emerging", velocity_pct: 210,
+      id: "ft-perilla", name: "Perilla Leaf Everything", keyword: "perilla", hashtag: "perilla", stage: "Emerging", velocity_pct: 210,
       visual_format: "perilla leaf torn over raw fish", hook: "Secret Menu",
       audio: "leaf tear and knife sound", est_weekly_revenue: 900,
       requires: ["perilla", "fluke", "pear"], fits: ["Korean"],
     },
     {
-      id: "ft-matcha", name: "Matcha Cream Everything", stage: "Mainstream", velocity_pct: 110,
+      id: "ft-matcha", name: "Matcha Cream Everything", keyword: "matcha", hashtag: "matcha", stage: "Mainstream", velocity_pct: 110,
       visual_format: "matcha cream pour", hook: "Sensory ASMR", audio: "pour sound", est_weekly_revenue: 500,
       requires: ["matcha", "milk", "heavy cream"], fits: ["Desserts", "Japanese"],
     },
     {
-      id: "ft-corn-dog", name: "Korean Corn Dogs", stage: "Saturated", velocity_pct: 30,
+      id: "ft-corn-dog", name: "Korean Corn Dogs", keyword: "korean corn dog", hashtag: "koreancorndog", stage: "Saturated", velocity_pct: 30,
       visual_format: "cheese pull", hook: "Shock/Scale", audio: "crunch sound", est_weekly_revenue: 300,
       requires: ["hot dogs", "rice flour", "mozzarella"], fits: ["Korean"],
     },
     {
-      id: "ft-dubai-chocolate", name: "Dubai Chocolate Desserts", stage: "Saturated", velocity_pct: 25,
+      id: "ft-dubai-chocolate", name: "Dubai Chocolate Desserts", keyword: "dubai chocolate", hashtag: "dubaichocolate", stage: "Saturated", velocity_pct: 25,
       visual_format: "pistachio kataifi snap", hook: "Shock/Scale", audio: "snap sound", est_weekly_revenue: 300,
       requires: ["pistachio cream", "kataifi", "chocolate"], fits: ["Desserts"],
     },

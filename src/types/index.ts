@@ -1,4 +1,4 @@
-export type TrackType = "home" | "chef-pepper" | "knowledge-graph" | "dish-to-post" | "trend-radar" | "creator-scout" | "intel-desk";
+export type TrackType = "home" | "comp-ledger" | "chef-pepper" | "knowledge-graph" | "dish-to-post" | "trend-radar" | "creator-scout" | "intel-desk";
 
 export type {
   RestaurantProfile,
@@ -7,7 +7,10 @@ export type {
   VettedCreator,
   RivalComplaint,
   Insight,
+  Scorecard,
 } from "@/lib/hospitalityGraph";
+export type { CompRecord, CadenceWeek, BookingRecord } from "@/lib/comps";
+export type { CreatorCheckResult, CheckFlag } from "@/lib/creatorCheck";
 export type { WebSource, YouSearchResponse } from "@/lib/youSearch";
 
 export interface GraphNode {

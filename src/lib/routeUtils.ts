@@ -12,6 +12,8 @@ export async function graphRoute(handler: (driver: Driver) => Promise<object>) {
     return NextResponse.json(await handler(driver));
   } catch (error: any) {
     console.error("Graph route failed:", error);
+    // Validation messages written for owners pass straight through; anything else is translated
+    if (error?.userFacing) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json({ error: friendlyGraphError(error) }, { status: 502 });
   }
 }

@@ -5,6 +5,7 @@ import { discoverRivals } from "@/lib/rivalDiscovery";
 import { discoverCreators } from "@/lib/creatorDiscovery";
 import { trendEvidence } from "@/lib/youSearch";
 import { isTregConfigured } from "@/lib/tregClient";
+import { runDeepEnrichment } from "@/lib/deepEnrichment";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -13,7 +14,13 @@ export const maxDuration = 60;
  * Runs the full data pipeline for the seeded restaurant:
  *   1. Rivals + their recent Google reviews (Treg) → Competitor / Complaint / Theme
  *   2. Creators who posted from the restaurant + neighborhood hashtags (Treg) → LocalCreator / Post / Place
+ *   conquest  Recent posts tagged at each rival's Instagram location (Treg) → creators who just ate at a competitor
  *   3. Live web evidence for every trend (You.com) → WebSource
+ *   Deep enrichment (separate steps, run in parallel):
+ *   signals   Google Trends + TikTok (Treg) → real trend velocity/stage, (FoodTrend)-[:TRACKED_AS]->(Hashtag)
+ *   busyness  Google Maps popular times (Treg) → (Place)-[:BUSY]->(TimeSlot), data-backed slow shifts
+ *   hashtags  #tags/@mentions from stored captions → (Post)-[:TAGGED]->(Hashtag), (Post)-[:MENTIONS]->(Account)
+ *   press     You.com coverage → (Place)-[:COVERED_BY]->(WebSource)
  * Costs a few cents in Treg calls, so it is disabled in production unless PIPELINE_TOKEN is set and sent.
  */
 export async function POST(req: NextRequest) {
@@ -32,6 +39,9 @@ export async function POST(req: NextRequest) {
     out.restaurant = restaurant.name;
     if (steps.includes("rivals")) out.rivals = await discoverRivals(driver);
     if (steps.includes("creators")) out.creators = await discoverCreators(driver, { force: true });
+    if (steps.includes("conquest")) out.conquest = await discoverCreators(driver, { force: true, mode: "conquest" });
+    const deep = steps.filter((s) => ["signals", "busyness", "hashtags", "press"].includes(s));
+    if (deep.length) out.deep = await runDeepEnrichment(driver, deep);
     if (steps.includes("trends")) {
       const board = await getTrendBoard(driver);
       out.trends = await Promise.all(

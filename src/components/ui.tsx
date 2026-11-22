@@ -183,6 +183,7 @@ export const stageStyle: Record<string, string> = {
   Accelerating: "bg-amber-500/10 text-amber-300 border-amber-500/30",
   Mainstream: "bg-neutral-500/10 text-neutral-300 border-neutral-500/30",
   Saturated: "bg-rose-500/10 text-rose-300 border-rose-500/30",
+  Niche: "bg-purple-500/10 text-purple-300 border-purple-500/30",
 };
 
 export function formatDate(value: string): string {

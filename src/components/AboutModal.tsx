@@ -27,8 +27,8 @@ const List: React.FC<{ items: React.ReactNode[] }> = ({ items }) => (
 
 const TIERS = [
   {
-    name: "CompGuard",
-    tag: "Good",
+    name: "Sous Chef",
+    tag: "Starter",
     price: "$149",
     per: "per month · $1,490/yr",
     buyer: "Single $100–$200/plate NYC venue: owner-operator, GM or chef-owner",
@@ -41,29 +41,29 @@ const TIERS = [
     ],
   },
   {
-    name: "GroupPulse",
-    tag: "Better",
+    name: "Head Chef",
+    tag: "Growth",
     price: "$399",
     per: "per month · $3,990/yr",
     featured: true,
     buyer: "City group, 3–4 locations: multi-unit GM or director of operations",
     payback: "Pays back with ~3–4 tracked two-tops a month at $150/plate",
     features: [
-      "Everything in CompGuard",
+      "Everything in Sous Chef",
       "Shared vetting rules across venues",
       "Off-peak seat routing (Tue/Wed discovery nights)",
       "Multi-venue ROI and time-to-value",
     ],
   },
   {
-    name: "BoroughCommand",
-    tag: "Best",
+    name: "Hospitality Group",
+    tag: "Multi-unit",
     price: "$999",
     per: "per month · $9,990/yr",
     buyer: "Multi-concept group across all five boroughs: VP Hospitality, CMO, PR, finance/legal",
     payback: "Pays back with ~10+ tracked covers a month, or one major brand save",
     features: [
-      "Everything in GroupPulse",
+      "Everything in Head Chef",
       "Concept governance and PR/VIP whitelist",
       "30–60s Research API creator dossiers",
       "Instant Discontinue across the portfolio",
@@ -190,7 +190,7 @@ export const AboutModal: React.FC<Props> = ({ isOpen, section, onClose }) => {
               "A working GraphRAG pipeline that links trends to the restaurant's stocked ingredients and menu, rivals' complaints to the restaurant's strengths, and creators to the places they post from.",
               "Multi-hop opportunity paths, such as people who just posted from the restaurant (warm leads) or rival weak spots the menu answers.",
               "A grounded mascot concierge whose answers can be traced back to graph data.",
-              "A business case that holds up: about $29/month in costs on a $399 plan (≈93% gross margin), and two or three extra tables a month cover the fee.",
+              "A business case that holds up: an 82% gross margin after You.com and hosting costs, break-even at about $14,635 MRR on a $12,000/month burn, and two or three tracked tables a month cover a venue's fee.",
               "An NYC go-to-market plan: the \"Free Food Influencer Audit\" as the cold-outreach hook and the \"Tuesday Night Engine\" positioning.",
             ]}
           />
