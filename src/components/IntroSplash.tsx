@@ -5,7 +5,7 @@ import React, { useEffect, useState } from "react";
 const SEEN_KEY = "bonapptea:intro-seen";
 
 /**
- * Netflix-style launch intro: the chrome wordmark resolves out of the digital rain, a phosphor scan
+ * Netflix-style launch intro: the chrome wordmark resolves out of the dark, a phosphor scan
  * line sweeps across, then it fades into the app. Plays once per browser session; click or any key
  * skips it; skipped entirely for prefers-reduced-motion.
  */

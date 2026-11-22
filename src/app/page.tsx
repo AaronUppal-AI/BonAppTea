@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Header } from "@/components/Header";
 import { BrowseHome } from "@/components/BrowseHome";
-import { MatrixRain } from "@/components/MatrixRain";
+import { NoodleBackdrop } from "@/components/NoodleBackdrop";
 import { IntroSplash } from "@/components/IntroSplash";
 import { TrackChefPepper } from "@/components/TrackChefPepper";
 import { TrackKnowledgeGraph } from "@/components/TrackKnowledgeGraph";
@@ -46,7 +46,7 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen flex flex-col font-sans">
-      <MatrixRain opacity={activeTrack === "home" ? 0.9 : 0.6} />
+      <NoodleBackdrop opacity={activeTrack === "home" ? 0.38 : 0.24} />
       <div className="scanlines" aria-hidden="true" />
       <IntroSplash />
       <Header
@@ -66,7 +66,7 @@ export default function Home() {
         }}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {activeTrack === "home" && (
           <BrowseHome
             query={query}
@@ -93,7 +93,7 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="border-t border-white/5 bg-neutral-950/60 backdrop-blur py-4 text-xs text-neutral-400 font-mono">
+      <footer className="relative z-10 border-t border-white/5 bg-neutral-950/60 backdrop-blur py-4 text-xs text-neutral-400 font-mono">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>BonAppTea · Fill your slow shifts with trends, creators and rival intel</span>
           <span className="text-neutral-400">Data: restaurant website · Google Maps &amp; Instagram via Treg · You.com · Neo4j</span>
