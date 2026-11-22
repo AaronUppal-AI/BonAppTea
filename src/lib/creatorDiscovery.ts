@@ -126,7 +126,9 @@ export async function discoverCreators(driver: Driver, opts: { rid?: string; for
     .slice(0, MAX_CANDIDATES);
 
   const knownHoods = await listNeighborhoods(driver);
+  const knownVenues = await listVenues(driver);
   const added: DiscoveredCreator[] = [];
+  const postsByCreator = new Map<string, PostRow[]>();
   const businessesSkipped: { handle: string; category: string }[] = [];
 
   // 2 + 3. Profile, then recent posts for non-business accounts.
@@ -178,6 +180,32 @@ export async function discoverCreators(driver: Driver, opts: { rid?: string; for
         const topHood = Array.from(hoodCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0];
         const audienceHood = topHood ?? (inCity > 0 ? `Elsewhere in ${restaurant.city}` : "Outside the city");
 
+        // Every post becomes a node; tagged locations become Places linked into the neighborhood graph.
+        postsByCreator.set(
+          `ig-${username}`,
+          items.slice(0, 12).map((it): PostRow => {
+            const code = it.code ?? it.shortcode ?? String(it.pk ?? it.id);
+            const caption = typeof it.caption === "string" ? it.caption : it.caption?.text ?? "";
+            const loc = it.location && typeof it.location === "object" ? it.location : null;
+            const locText = loc ? `${loc.city ?? ""} ${loc.name ?? ""}` : "";
+            const hood = loc ? knownHoods.find((h) => locText.toLowerCase().includes(h.toLowerCase())) ?? null : null;
+            const venueId = loc ? knownVenues.get(String(loc.name ?? "").toLowerCase()) ?? null : null;
+            return {
+              id: `ig-post-${code}`,
+              takenAt: typeof it.taken_at === "number" ? it.taken_at : null,
+              sponsored: Boolean(it.is_paid_partnership),
+              likes: typeof it.like_count === "number" ? it.like_count : null,
+              comments: typeof it.comment_count === "number" ? it.comment_count : null,
+              caption: caption.slice(0, 200),
+              url: `https://www.instagram.com/p/${code}/`,
+              venueId,
+              place: loc && !venueId
+                ? { id: `ig-loc-${loc.pk ?? loc.facebook_places_id ?? loc.name}`, name: String(loc.name ?? "Unknown place"), city: loc.city ?? null, hood, inCity: hood !== null || CITY_PATTERN.test(locText) }
+                : null,
+            };
+          })
+        );
+
         added.push({
           handle: `@${username}`,
           followers,
@@ -201,7 +229,12 @@ export async function discoverCreators(driver: Driver, opts: { rid?: string; for
       // Accounts now recognized as businesses are restaurants, not creators.
       if (businessesSkipped.length) {
         const ids = businessesSkipped.map((b) => `ig-${b.handle.slice(1)}`);
-        await tx.run(`MATCH (c:LocalCreator) WHERE c.source = 'treg' AND c.id IN $ids DETACH DELETE c`, { ids });
+        await tx.run(
+          `MATCH (c:LocalCreator) WHERE c.source = 'treg' AND c.id IN $ids
+           OPTIONAL MATCH (c)-[:POSTED]->(p:Post)
+           DETACH DELETE p, c`,
+          { ids }
+        );
         // Remember them so later scans don't pay to look them up again.
         await tx.run(
           `UNWIND $ids AS id MERGE (b:ScannedBusiness {id: id}) SET b.scanned_at = datetime()`,
@@ -209,18 +242,45 @@ export async function discoverCreators(driver: Driver, opts: { rid?: string; for
         );
       }
       for (const c of added) {
+        const id = `ig-${c.handle.slice(1)}`;
+        const posts = postsByCreator.get(id) ?? [];
+        // Local reach, home neighborhood and rival sponsorships are derived from these posts at query time.
         await tx.run(
           `MERGE (c:LocalCreator {id: $id})
            SET c.handle = $handle, c.followers = $followers, c.engagement_rate = $engagement,
-               c.local_audience_pct = $localPct, c.local_metric = 'posting', c.geotagged_posts = $geotagged,
                c.category = $category, c.sample_post_url = $samplePostUrl, c.source = 'treg',
+               c.profile_url = 'https://www.instagram.com/' + substring($handle, 1) + '/',
                c.discovered_at = datetime()
+           REMOVE c.local_audience_pct
            WITH c
-           OPTIONAL MATCH (c)-[old:AUDIENCE_LOCATED_IN]->() DELETE old
-           WITH c
-           MERGE (n:Neighborhood {name: $audienceHood})
-           MERGE (c)-[:AUDIENCE_LOCATED_IN]->(n)`,
-          { id: `ig-${c.handle.slice(1)}`, ...c }
+           UNWIND $posts AS p
+           MERGE (post:Post {id: p.id})
+           SET post.posted_at = CASE WHEN p.takenAt IS NULL THEN NULL ELSE datetime({epochSeconds: toInteger(p.takenAt)}) END,
+               post.sponsored = p.sponsored, post.likes = p.likes, post.comments = p.comments,
+               post.caption = p.caption, post.url = p.url, post.source = 'treg'
+           MERGE (c)-[:POSTED]->(post)`,
+          { id, ...c, posts }
+        );
+        // Posts tagged at a venue already in the graph (a rival, or us)
+        await tx.run(
+          `UNWIND $posts AS p
+           MATCH (post:Post {id: p.id}), (v:Place {id: p.venueId})
+           MERGE (post)-[:AT]->(v)`,
+          { posts: posts.filter((p) => p.venueId) }
+        );
+        // Posts tagged at other places: link the place to its neighborhood, or to the city
+        await tx.run(
+          `MATCH (city:City {name: $city})
+           UNWIND $posts AS p
+           MATCH (post:Post {id: p.id})
+           MERGE (pl:Place {id: p.place.id})
+           SET pl.name = p.place.name, pl.city_text = p.place.city, pl.kind = 'instagram-location', pl.source = 'treg'
+           MERGE (post)-[:AT]->(pl)
+           WITH pl, p, city
+           OPTIONAL MATCH (h:Neighborhood {name: p.place.hood})
+           FOREACH (_ IN CASE WHEN h IS NOT NULL THEN [1] ELSE [] END | MERGE (pl)-[:IN]->(h))
+           FOREACH (_ IN CASE WHEN h IS NULL AND p.place.inCity THEN [1] ELSE [] END | MERGE (pl)-[:IN_CITY]->(city))`,
+          { city: restaurant.city, posts: posts.filter((p) => p.place) }
         );
       }
       await tx.run(
@@ -263,11 +323,34 @@ async function listRecentlyScanned(driver: Driver): Promise<Set<string>> {
   }
 }
 
+interface PostRow {
+  id: string;
+  takenAt: number | null;
+  sponsored: boolean;
+  likes: number | null;
+  comments: number | null;
+  caption: string;
+  url: string;
+  venueId: string | null;
+  place: { id: string; name: string; city: string | null; hood: string | null; inCity: boolean } | null;
+}
+
 async function listNeighborhoods(driver: Driver): Promise<string[]> {
   const session = driver.session();
   try {
-    const res = await session.run(`MATCH (n:Neighborhood) WHERE NOT n.name STARTS WITH 'Elsewhere' AND n.name <> 'Outside the city' RETURN n.name AS name`);
+    const res = await session.run(`MATCH (n:Neighborhood) RETURN n.name AS name`);
     return res.records.map((r) => r.get("name") as string);
+  } finally {
+    await session.close();
+  }
+}
+
+/** Restaurant and rival names → node id, so a tagged post links to the venue already in the graph. */
+async function listVenues(driver: Driver): Promise<Map<string, string>> {
+  const session = driver.session();
+  try {
+    const res = await session.run(`MATCH (v) WHERE v:Restaurant OR v:Competitor RETURN toLower(v.name) AS name, v.id AS id`);
+    return new Map(res.records.map((r) => [r.get("name") as string, r.get("id") as string]));
   } finally {
     await session.close();
   }

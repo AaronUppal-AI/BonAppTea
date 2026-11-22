@@ -78,6 +78,22 @@ src/
 
 You.com results are never faked: if `YOU_API_KEY` is missing or a search fails, the panel says so. Each graph panel can show the Cypher query behind it.
 
+## Knowledge graph (Neo4j, schema v3)
+
+```
+(City)<-[:IN_CITY]-(Neighborhood)-[:ADJACENT_TO]-(Neighborhood)
+(Place)-[:IN]->(Neighborhood)                       Restaurant and Competitor are also :Place
+(Restaurant)-[:SERVES]->(MenuItem)-[:FEATURING]->(Ingredient)<-[:STOCKS]-(Restaurant)
+(FoodTrend)-[:REQUIRES]->(Ingredient)   (FoodTrend)-[:FITS]->(Cuisine)   (FoodTrend)-[:EVIDENCED_BY]->(WebSource)
+(Competitor)-[:CAPITALIZES_ON]->(FoodTrend)
+(Competitor)-[:HAS_COMPLAINT]->(Complaint)-[:ABOUT]->(Theme)<-[:ADDRESSES]-(Strength)<-[:HAS_STRENGTH]-(Restaurant)
+(LocalCreator)-[:POSTED]->(Post)-[:AT]->(Place)     (LocalCreator)-[:COVERS]->(Cuisine)
+```
+
+A creator's home neighborhood, local reach and paid rival posts are **derived by traversing their posts**, so demo creators and creators found live through Treg are vetted by the same queries. You.com trend evidence is written back as `WebSource` nodes.
+
+The **Knowledge Graph** tab lists multi-hop opportunity paths, such as *creator → post at a rival → rival's complaint → theme → your strength* (a conquest invite). Clicking one highlights its path in an interactive Cytoscape view.
+
 ## Status
 
 Restaurant, menu, trend and competitor data in the graph is demo seed data for one East Village restaurant. Creators are a mix of demo data and **live creators discovered through Treg** (marked "Live · Treg").

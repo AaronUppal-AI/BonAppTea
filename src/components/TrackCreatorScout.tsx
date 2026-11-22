@@ -39,6 +39,28 @@ const LiveBadge: React.FC = () => (
   </span>
 );
 
+/** The handle, linked to the real Instagram profile when there is one. Demo creators are labeled, not linked. */
+const Handle: React.FC<{ c: VettedCreator; className?: string }> = ({ c, className }) =>
+  c.profileUrl ? (
+    <a
+      href={c.profileUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className={`${className ?? ""} hover:underline inline-flex items-center gap-0.5`}
+      title={`Open ${c.handle} on Instagram`}
+    >
+      {c.handle} <ExternalLink className="w-3 h-3 opacity-60" />
+    </a>
+  ) : (
+    <span className={className}>
+      {c.handle}{" "}
+      <span className="text-[9px] uppercase px-1 py-0.5 rounded bg-neutral-800 text-neutral-400 align-middle" title="Made-up seed data, not a real account">
+        Demo
+      </span>
+    </span>
+  );
+
 const localText = (c: VettedCreator) =>
   c.localPct === null ? "local reach unknown" : c.localMetric === "posting" ? `${c.localPct}% of tagged posts in NYC` : `${c.localPct}% local`;
 
@@ -53,7 +75,7 @@ const k = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
 
 function inviteText(c: VettedCreator, r: RestaurantProfile, dish: string | null, shift: string) {
   const name = c.handle.replace(/^@/, "");
-  return `Hey ${name}! We're ${r.name}, a ${r.cuisine.toLowerCase()} spot in ${r.neighborhood}. Your ${c.audienceHood} followers are exactly the neighbors we cook for. We'd love to host you and a guest for a comped tasting${dish ? ` of our ${dish}` : ""} on ${shift}. No posting required; if you love it, we'd be thrilled if you shared it. Which night works?`;
+  return `Hey ${name}! We're ${r.name}, ${/^[aeiou]/i.test(r.cuisine) ? "an" : "a"} ${r.cuisine} spot in the ${r.neighborhood}. Your ${c.audienceHood} followers are exactly the neighbors we cook for. We'd love to host you and a guest for a comped tasting${dish ? ` of our ${dish}` : ""} on ${shift}. No posting required; if you love it, we'd be thrilled if you shared it. Which night works?`;
 }
 
 export const TrackCreatorScout: React.FC = () => {
@@ -178,8 +200,18 @@ export const TrackCreatorScout: React.FC = () => {
               >
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-white flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" /> {c.handle}
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" /> <Handle c={c} />
                     {c.source === "treg" && <LiveBadge />}
+                    {c.alreadyPostedAboutUs && (
+                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                        Already posted about you
+                      </span>
+                    )}
+                    {c.cuisineFit && (
+                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-300 border border-yellow-500/30">
+                        Covers your cuisine
+                      </span>
+                    )}
                   </span>
                   <span className="text-[11px] font-mono text-emerald-300">score {c.score}</span>
                 </div>
@@ -210,7 +242,7 @@ export const TrackCreatorScout: React.FC = () => {
               <div key={c.handle} className="p-3 rounded-xl border border-neutral-800/70 bg-neutral-950/40">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-neutral-400 flex items-center gap-1.5">
-                    <XCircle className="w-4 h-4 text-rose-400/80" /> {c.handle}
+                    <XCircle className="w-4 h-4 text-rose-400/80" /> <Handle c={c} />
                     {c.source === "treg" && <LiveBadge />}
                   </span>
                   <span className="text-[11px] text-neutral-500">
@@ -229,7 +261,9 @@ export const TrackCreatorScout: React.FC = () => {
           <div className="lg:col-span-5">
             {selected ? (
               <div className="p-4 rounded-xl border border-neutral-800 bg-neutral-900/40 space-y-3 lg:sticky lg:top-32">
-                <h3 className="text-sm font-bold text-white">VIP tasting invite for {selected.handle}</h3>
+                <h3 className="text-sm font-bold text-white">
+                  VIP tasting invite for <Handle c={selected} />
+                </h3>
                 <label className="block text-[11px] text-neutral-400">
                   Slow shift to fill
                   <select

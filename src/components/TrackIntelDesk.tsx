@@ -99,6 +99,11 @@ export const TrackIntelDesk: React.FC = () => {
                 ) : (
                   <p className="text-[11px] text-neutral-500 mt-2">No matching strength on file. Nothing to exploit here.</p>
                 )}
+                {r.ourAnswer && r.recentVisitors.length > 0 && (
+                  <p className="text-[11px] text-emerald-300 mt-1.5">
+                    Conquest: {r.recentVisitors.join(", ")} posted from {r.competitor} this month. Invite them to compare.
+                  </p>
+                )}
               </div>
             ))}
           </div>

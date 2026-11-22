@@ -1,4 +1,4 @@
-export type TrackType = "chef-pepper" | "dish-to-post" | "trend-radar" | "creator-scout" | "intel-desk";
+export type TrackType = "chef-pepper" | "knowledge-graph" | "dish-to-post" | "trend-radar" | "creator-scout" | "intel-desk";
 
 export type {
   RestaurantProfile,
@@ -6,6 +6,7 @@ export type {
   PostPlan,
   VettedCreator,
   RivalComplaint,
+  Insight,
 } from "@/lib/hospitalityGraph";
 export type { WebSource, YouSearchResponse } from "@/lib/youSearch";
 

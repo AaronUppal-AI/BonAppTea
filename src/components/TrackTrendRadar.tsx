@@ -122,6 +122,15 @@ export const TrackTrendRadar: React.FC<{ onPlanPost?: (trend: string) => void }>
                     <div className="text-amber-300">{selected.missing.join(", ") || "Nothing, ready this weekend"}</div>
                   </div>
                 </div>
+                <p className="text-[11px] text-neutral-400">
+                  Fits {selected.fits.join(", ")}
+                  {selected.fitsUs ? " (your menu)" : " (not your cuisine)"} ·{" "}
+                  {selected.rivalsOnIt.length ? (
+                    <span className="text-rose-300">{selected.rivalsOnIt.join(", ")} already on it</span>
+                  ) : (
+                    <span className="text-emerald-300">no rival nearby is doing it</span>
+                  )}
+                </p>
                 {(selected.stage === "Saturated" || selected.stage === "Mainstream") && (
                   <p className="text-[11px] text-rose-300/90">
                     This one is past its peak. Chasing it now makes you look late, not trendy.
