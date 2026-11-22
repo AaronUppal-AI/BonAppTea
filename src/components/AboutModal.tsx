@@ -27,44 +27,46 @@ const List: React.FC<{ items: React.ReactNode[] }> = ({ items }) => (
 
 const TIERS = [
   {
-    name: "Sous Chef",
-    tag: "Starter",
-    price: "$179",
-    per: "per location / month",
+    name: "CompGuard",
+    tag: "Good",
+    price: "$149",
+    per: "per month · $1,490/yr",
+    buyer: "Single $100–$200/plate NYC venue: owner-operator, GM or chef-owner",
+    payback: "Pays back with ~2 prevented $350 comps a month",
     features: [
-      "1 location",
-      "Daily Dish-to-Post viral hooks",
-      "Weekly Trend Radar",
-      "20 vetted local creator pitches a month",
-      "Competitor review monitoring",
+      "Under-10-second live-web creator checks with source cards",
+      "Disclosure flags (#ad / #gifted)",
+      "Weekly comp ROI and time-to-value",
+      "One-click Discontinue with a polite Soft Off-Ramp DM",
     ],
   },
   {
-    name: "Head Chef",
-    tag: "Growth",
+    name: "GroupPulse",
+    tag: "Better",
     price: "$399",
-    per: "per location / month",
+    per: "per month · $3,990/yr",
     featured: true,
+    buyer: "City group, 3–4 locations: multi-unit GM or director of operations",
+    payback: "Pays back with ~3–4 tracked two-tops a month at $150/plate",
     features: [
-      "1 location",
-      "Unlimited post hooks",
-      "Real-time Trend Radar (local + national)",
-      "50 vetted creator pitches a month, with contact enrichment",
-      "Competitor menu and review spy",
-      "Custom Chef Pepper-style Masko mascot with QR code",
+      "Everything in CompGuard",
+      "Shared vetting rules across venues",
+      "Off-peak seat routing (Tue/Wed discovery nights)",
+      "Multi-venue ROI and time-to-value",
     ],
   },
   {
-    name: "Hospitality Group",
-    tag: "Multi-unit",
+    name: "BoroughCommand",
+    tag: "Best",
     price: "$999",
-    per: "up to 4 locations / month",
+    per: "per month · $9,990/yr",
+    buyer: "Multi-concept group across all five boroughs: VP Hospitality, CMO, PR, finance/legal",
+    payback: "Pays back with ~10+ tracked covers a month, or one major brand save",
     features: [
-      "Multi-location hub",
-      "Cross-neighborhood competitor spy",
-      "150 creator pitches a month",
-      "Automated influencer booking and tracking",
-      "Custom animated Masko mascot and web table concierge",
+      "Everything in GroupPulse",
+      "Concept governance and PR/VIP whitelist",
+      "30–60s Research API creator dossiers",
+      "Instant Discontinue across the portfolio",
     ],
   },
 ];
@@ -217,7 +219,7 @@ export const AboutModal: React.FC<Props> = ({ isOpen, section, onClose }) => {
           <div ref={pricingRef} className="pt-8 scroll-mt-4">
             <h2 className="text-lg font-bold text-white">Pricing</h2>
             <p className="text-xs text-neutral-400 mt-0.5">
-              Two or three extra tables a month cover the fee. No agency retainer, no free meals for vanity accounts.
+              For $100–$200/plate NYC dining rooms. Stop comping guests whose audience never books, and prove the return on the ones who do.
             </p>
             <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
               {TIERS.map((t) => (
@@ -238,6 +240,7 @@ export const AboutModal: React.FC<Props> = ({ isOpen, section, onClose }) => {
                     <span className="text-3xl font-extrabold text-white">{t.price}</span>
                   </div>
                   <div className="text-[11px] text-neutral-400">{t.per}</div>
+                  <p className="mt-3 text-[11px] text-neutral-300 leading-snug">{t.buyer}</p>
                   <ul className="mt-4 space-y-2 text-[12px] text-neutral-300 flex-1">
                     {t.features.map((f) => (
                       <li key={f} className="flex items-start gap-2">
@@ -246,6 +249,7 @@ export const AboutModal: React.FC<Props> = ({ isOpen, section, onClose }) => {
                       </li>
                     ))}
                   </ul>
+                  <p className="mt-4 pt-3 border-t border-white/10 font-mono text-[10px] text-emerald-300 leading-snug">{t.payback}</p>
                 </div>
               ))}
             </div>

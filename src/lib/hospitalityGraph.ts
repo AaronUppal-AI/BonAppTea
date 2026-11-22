@@ -184,7 +184,8 @@ export async function ensureHospitalitySeed(driver: Driver, restaurantId: string
 async function runCypher(driver: Driver, cypher: string, params: Record<string, unknown>) {
   const session = driver.session({ defaultAccessMode: neo4j.session.READ });
   try {
-    const res = await session.run(cypher, params);
+    // Every read has a time limit so a slow query can't stall a tab
+    const res = await session.run(cypher, params, { timeout: 12000 });
     return res.records.map((r) => toPlain(r.toObject()) as any);
   } finally {
     await session.close();

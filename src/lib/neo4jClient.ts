@@ -16,7 +16,8 @@ export function getNeo4jDriver(): Driver | null {
       driverInstance = neo4j.driver(uri, neo4j.auth.basic(user, password), {
         maxConnectionLifetime: 3 * 60 * 60 * 1000, // 3 hours
         maxConnectionPoolSize: 50,
-        connectionAcquisitionTimeout: 20000, // 20s
+        connectionAcquisitionTimeout: 10000, // 10s
+        connectionTimeout: 8000, // 8s to open a socket
       });
     } catch (e) {
       console.error("Failed to initialize Neo4j driver:", e);

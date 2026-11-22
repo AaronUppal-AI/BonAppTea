@@ -27,6 +27,8 @@ export interface YouSearchResponse {
 
 const ENDPOINT = "https://ydc-index.io/v1/search";
 const CACHE_TTL_MS = 15 * 60 * 1000;
+// Live search must never hold a page hostage: give up and say so after this long
+const TIMEOUT_MS = 8000;
 const cache = new Map<string, { at: number; value: YouSearchResponse }>();
 
 export function isYouConfigured(): boolean {
@@ -53,6 +55,7 @@ export async function youSearch(
       headers: { "X-API-Key": key, "Content-Type": "application/json" },
       body: JSON.stringify(body),
       cache: "no-store",
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (!res.ok) {
       return { query, live: false, sources: [], error: `You.com search returned HTTP ${res.status}` };
@@ -65,7 +68,8 @@ export async function youSearch(
     cache.set(cacheKey, { at: Date.now(), value });
     return value;
   } catch (error: any) {
-    return { query, live: false, sources: [], error: error?.message || "You.com search failed" };
+    const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+    return { query, live: false, sources: [], error: timedOut ? `You.com didn't answer within ${TIMEOUT_MS / 1000}s` : error?.message || "You.com search failed" };
   }
 }
 

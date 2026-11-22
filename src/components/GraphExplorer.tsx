@@ -56,13 +56,15 @@ export const GraphExplorer: React.FC<Props> = ({ height = 420, focus = null, def
 
   useEffect(() => {
     setError(null);
-    fetch("/api/graph/data")
+    fetch("/api/graph/data", { signal: AbortSignal.timeout(25000) })
       .then(async (r) => {
         const d = await r.json();
         if (!r.ok) throw new Error(d?.error || "Graph unavailable");
         setData({ nodes: d.nodes, edges: d.edges });
       })
-      .catch((e) => setError(e.message));
+      .catch((e) =>
+        setError(e?.name === "TimeoutError" || e?.name === "AbortError" ? "The graph took too long to load. Use ↻ to try again." : e.message)
+      );
   }, [reloadKey, fetchKey]);
 
   // A focused insight can span lenses, so show everything while it is highlighted.

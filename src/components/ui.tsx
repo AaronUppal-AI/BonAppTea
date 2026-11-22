@@ -166,8 +166,16 @@ export const FreshnessLine: React.FC<{ items?: Freshness[] | null }> = ({ items 
     </div>
   ) : null;
 
-export const ErrorNote: React.FC<{ message: string }> = ({ message }) => (
-  <div className="p-3 rounded-lg bg-rose-950/30 border border-rose-500/30 text-xs text-rose-300">{message}</div>
+export const ErrorNote: React.FC<{ message: string; onRetry?: () => void }> = ({ message, onRetry }) => (
+  <div role="alert" className="p-3 rounded-lg bg-rose-950/30 border border-rose-500/30 text-xs text-rose-300 flex items-center justify-between gap-3">
+    <span>{message}</span>
+    <button
+      onClick={onRetry ?? (() => window.location.reload())}
+      className="shrink-0 px-2.5 py-1 rounded-md border border-rose-400/40 text-rose-200 hover:bg-rose-500/10"
+    >
+      Try again
+    </button>
+  </div>
 );
 
 export const stageStyle: Record<string, string> = {
@@ -183,8 +191,17 @@ export function formatDate(value: string): string {
 }
 
 /** Small fetch helper that throws the server's error message. */
-export async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
+/** Fetch JSON with a time limit, so no panel can spin forever. Throws the server's error message. */
+export async function getJson<T>(url: string, init?: RequestInit, timeoutMs = 25000): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(url, { ...init, signal: init?.signal ?? AbortSignal.timeout(timeoutMs) });
+  } catch (e: any) {
+    if (e?.name === "TimeoutError" || e?.name === "AbortError") {
+      throw new Error(`This took longer than ${Math.round(timeoutMs / 1000)}s. The data sources may be slow; try again.`);
+    }
+    throw new Error("Couldn't reach the server. Check your connection and try again.");
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
   return data as T;

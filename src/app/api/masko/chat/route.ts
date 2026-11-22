@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getNeo4jDriver } from "@/lib/neo4jClient";
 import { answerWithGraph, DEFAULT_RESTAURANT_ID } from "@/lib/hospitalityGraph";
+import { friendlyGraphError } from "@/lib/routeUtils";
 
 // Chef Pepper: the BonAppTea Masko mascot (mascot id 9321515e-95e2-4367-8f09-185e05c6988c).
 const MASCOT = {
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
         speech: "I couldn't reach the kitchen graph just now. Give me a second and ask again.",
         mood: "alert",
         graph: null,
-        error: error?.message || "Graph query failed",
+        error: friendlyGraphError(error),
         timestamp: new Date().toISOString(),
       },
       { status: 502 }

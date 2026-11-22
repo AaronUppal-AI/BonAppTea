@@ -30,7 +30,8 @@ export const KOCHI = {
     // Shifts the owner wants to fill (Kochi serves dinner only)
     slow_shifts: ["Monday dinner", "Tuesday dinner", "5:00 PM seatings"],
     // Chef Shim's own restaurants are not rivals
-    sister_restaurants: ["Mari"],
+    // Chef Shim's other restaurants (Team page; PM brief) are never treated as rivals
+    sister_restaurants: ["Mari", "Gui", "GUI Steakhouse"],
     google_place_id: "ChIJN8SzjFRZwokR-b5lqNXcg44",
     instagram_location_id: "869095460127552",
     // When the menu and facts above were last checked against the website

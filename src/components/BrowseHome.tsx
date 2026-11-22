@@ -5,7 +5,7 @@ import { Play, Info, ChevronLeft, ChevronRight, X, ExternalLink, Route, Clock } 
 import type {
   Insight, VettedCreator, BoardTrend, PostPlan, RivalComplaint, RestaurantProfile, TrackType, YouSearchResponse,
 } from "@/types";
-import { getJson } from "./ui";
+import { getJson, ErrorNote } from "./ui";
 import { useCutout } from "./useCutout";
 
 /**
@@ -347,9 +347,13 @@ const DetailModal: React.FC<{
   );
 };
 
-const Billboard: React.FC<{ restaurant: RestaurantProfile | null; features: Tile[]; onOpen: (t: Tile) => void; onGo: (t: TrackType) => void }> = ({
-  restaurant, features, onOpen, onGo,
-}) => {
+const Billboard: React.FC<{
+  restaurant: RestaurantProfile | null;
+  features: Tile[];
+  loaded: boolean;
+  onOpen: (t: Tile) => void;
+  onGo: (t: TrackType) => void;
+}> = ({ restaurant, features, loaded, onOpen, onGo }) => {
   const [i, setI] = useState(0);
   const [paused, setPaused] = useState(false);
   const chef = useCutout("/masko/chef-pepper.png");
@@ -395,6 +399,17 @@ const Billboard: React.FC<{ restaurant: RestaurantProfile | null; features: Tile
                 <Info className="w-5 h-5" /> More info
               </button>
             </div>
+          </div>
+        ) : loaded ? (
+          // Loaded but nothing to feature: say so instead of pulsing forever
+          <div className="animate-fade-up">
+            <h1 className="font-display chrome-text text-3xl sm:text-5xl leading-[1.05]">Your kitchen graph is warming up</h1>
+            <p className="mt-4 text-sm sm:text-base text-neutral-200 leading-relaxed">
+              No opportunities to feature yet. Browse the tabs above, or ask Chef Pepper what to do tonight.
+            </p>
+            <button onClick={() => onGo("chef-pepper")} className="mt-6 flex items-center gap-2 px-6 py-2.5 rounded-md bg-white text-black font-semibold hover:bg-neutral-200">
+              <Play className="w-5 h-5 fill-black" /> Ask Chef Pepper
+            </button>
           </div>
         ) : (
           <div className="space-y-3 animate-pulse">
@@ -510,8 +525,8 @@ export const BrowseHome: React.FC<{ onNavigate: (track: TrackType) => void; quer
         </section>
       ) : (
         <>
-          <Billboard restaurant={data?.restaurant ?? null} features={features} onOpen={openTile} onGo={go} />
-          {error && <div className="text-sm text-rose-300">{error}</div>}
+          <Billboard restaurant={data?.restaurant ?? null} features={features} loaded={Boolean(data || error)} onOpen={openTile} onGo={go} />
+          {error && <ErrorNote message={error} />}
           {!data && !error && (
             <div className="space-y-8" aria-busy="true">
               {[0, 1, 2].map((r) => (

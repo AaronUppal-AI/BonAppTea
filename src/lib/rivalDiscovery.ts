@@ -1,6 +1,7 @@
 import type { Driver } from "neo4j-driver";
 import { tregCall } from "./tregClient";
 import { getRestaurant, ensureHospitalitySeed, DEFAULT_RESTAURANT_ID } from "./hospitalityGraph";
+import { KOCHI } from "./restaurants/kochi";
 
 /**
  * Live rival intel through Treg, written into Neo4j.
@@ -63,7 +64,8 @@ export async function discoverRivals(driver: Driver, rid = DEFAULT_RESTAURANT_ID
   const search = await tregCall("treg.google.serp.maps", {}, { body: { q: query }, maxCostUsd: 0.02 });
   costMicro += search.costMicro;
   const places: any[] = search.data?.output?.places ?? [];
-  const exclude = new Set([r.name, ...(r.sisterRestaurants ?? [])].map((n) => n.toLowerCase()));
+  // Sister restaurants come from the graph and the seed file, so new ones apply without a re-seed
+  const exclude = new Set([r.name, ...(r.sisterRestaurants ?? []), ...KOCHI.restaurant.sister_restaurants].map((n) => n.toLowerCase()));
   const rivals = places
     .filter((p) => p.place_id && p.place_id !== r.googlePlaceId)
     .filter((p) => !Array.from(exclude).some((n) => String(p.name ?? "").toLowerCase().startsWith(n)))
