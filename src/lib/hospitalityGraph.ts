@@ -306,16 +306,18 @@ export async function getTrendBoard(driver: Driver, rid = DEFAULT_RESTAURANT_ID)
 export const POST_PLANS_CYPHER = `
 MATCH (r:Restaurant {id: $rid})-[:SERVES]->(m:MenuItem)
 OPTIONAL MATCH (m)-[:FEATURING]->(i:Ingredient)<-[:REQUIRES]-(t:FoodTrend)
-WHERE t.stage IN ['Emerging', 'Accelerating']
-WITH m, t, count(i) AS overlap
-ORDER BY overlap DESC, t.velocity_pct DESC
+// Any trend people still search for; rising ones rank first, saturated ones are left out
+WHERE t.stage <> 'Saturated'
+WITH m, t, count(i) AS overlap,
+     CASE t.stage WHEN 'Emerging' THEN 0 WHEN 'Accelerating' THEN 0 WHEN 'Niche' THEN 1 ELSE 2 END AS stageRank
+ORDER BY overlap DESC, stageRank ASC, t.velocity_pct DESC
 // One shared staple (cream, eggs) is not a real match; require two.
 WITH m, collect(CASE WHEN t IS NULL OR overlap < 2 THEN NULL ELSE {
   trend: t.name, stage: t.stage, velocity: t.velocity_pct, hook: t.hook,
-  audio: t.audio, format: t.visual_format, overlap: overlap } END) AS matches
+  audio: t.audio, format: t.visual_format, overlap: overlap, stageRank: stageRank } END) AS matches
 RETURN m.id AS id, m.name AS dish, m.price AS price, m.margin AS margin,
        [(m)-[:FEATURING]->(x:Ingredient) | x.name] AS ingredients, matches[0] AS best
-ORDER BY best IS NULL, best.velocity DESC`;
+ORDER BY best IS NULL, best.stageRank ASC, best.velocity DESC`;
 
 export interface PostPlan {
   id: string;

@@ -137,12 +137,22 @@ export const TrackTrendRadar: React.FC<{ onPlanPost?: (trend: string) => void }>
                     <span className="text-emerald-300">no rival nearby is doing it</span>
                   )}
                 </p>
-                {(selected.stage === "Saturated" || selected.stage === "Mainstream") && (
+                {selected.stage === "Saturated" && (
                   <p className="text-[11px] text-rose-300/90">
                     This one is past its peak. Chasing it now makes you look late, not trendy.
                   </p>
                 )}
-                {onPlanPost && (selected.stage === "Emerging" || selected.stage === "Accelerating") && (
+                {selected.stage === "Mainstream" && (
+                  <p className="text-[11px] text-neutral-400">
+                    Steady and widely known. Good for a crowd-pleaser post, but it won&apos;t make you look early.
+                  </p>
+                )}
+                {selected.stage === "Niche" && (
+                  <p className="text-[11px] text-neutral-400">
+                    Small but steady search interest. A fit for a signature-dish post, not a viral spike.
+                  </p>
+                )}
+                {onPlanPost && selected.stage !== "Saturated" && (
                   <button
                     onClick={() => onPlanPost(selected.name)}
                     className="text-xs px-3 py-1.5 rounded-lg bg-amber-500 text-black font-semibold hover:bg-amber-400 flex items-center gap-1.5"

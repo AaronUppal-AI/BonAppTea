@@ -38,6 +38,9 @@ function buildPost(plan: PostPlan, r: RestaurantProfile) {
   };
 }
 
+/** Google search-interest change over the last 4 weeks, with its sign */
+const signed = (v: number | null | undefined) => (v === null || v === undefined ? "—" : `${v > 0 ? "+" : ""}${v}%`);
+
 export const TrackDishToPost: React.FC<{ focusTrend?: string | null }> = ({ focusTrend }) => {
   const [data, setData] = useState<PlansData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -117,7 +120,7 @@ export const TrackDishToPost: React.FC<{ focusTrend?: string | null }> = ({ focu
                 <div className="text-[11px] mt-1">
                   {p.best ? (
                     <span className="text-pink-300">
-                      ↗ {p.best.trend} (+{p.best.velocity}%)
+                      {p.best.velocity >= 25 ? "↗" : "·"} {p.best.trend} ({p.best.stage}, {signed(p.best.velocity)})
                     </span>
                   ) : (
                     <span className="text-neutral-500">No live trend match</span>
@@ -130,7 +133,7 @@ export const TrackDishToPost: React.FC<{ focusTrend?: string | null }> = ({ focu
           <div className="lg:col-span-8 space-y-4">
             {plan && !plan.best && (
               <div className="p-4 rounded-xl border border-neutral-800 bg-neutral-900/40 text-xs text-neutral-400">
-                {plan.dish} doesn&apos;t share ingredients with an emerging or accelerating trend right now. Post it as a
+                {plan.dish} doesn&apos;t share ingredients with a tracked trend right now. Post it as a
                 plain beauty shot, or pick a dish with a trend match.
               </div>
             )}
@@ -141,7 +144,7 @@ export const TrackDishToPost: React.FC<{ focusTrend?: string | null }> = ({ focu
                   <h3 className="text-base font-bold text-white">{plan.dish}</h3>
                   <span className="text-xs text-neutral-500">as a</span>
                   <span className={`text-[11px] px-2 py-0.5 rounded-full border ${stageStyle[plan.best.stage]}`}>
-                    {plan.best.trend} · +{plan.best.velocity}%
+                    {plan.best.trend} · {plan.best.stage} · {signed(plan.best.velocity)}
                   </span>
                   <span className="text-[11px] px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-300">{plan.best.hook} hook</span>
                 </div>
